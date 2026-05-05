@@ -1,0 +1,14 @@
+---
+# =====================================================================
+# cPanel Git Version Control — deploy automático
+# =====================================================================
+# Quando você clica em "Deploy HEAD Commit" no cPanel, este script
+# copia tudo que está em public/ para a raiz do subdomínio.
+# =====================================================================
+deployment:
+  tasks:
+    - export DEPLOYPATH=/home/murilosp/briefing.docads.com.br/
+    - /bin/mkdir -p $DEPLOYPATH
+    - /bin/cp -Rf public/. $DEPLOYPATH
+    - /bin/chmod -R 755 $DEPLOYPATH
+    - /bin/find $DEPLOYPATH -type f -exec chmod 644 {} \;
