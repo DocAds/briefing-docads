@@ -74,6 +74,8 @@
               : ''
             }
             <button class="btn btn-outline" id="btn-edit">Editar</button>
+            <button class="btn btn-ghost" id="btn-archive" style="color:var(--text-muted);">${c.status === 'archived' ? 'Desarquivar' : 'Arquivar'}</button>
+            <button class="btn btn-ghost" id="btn-delete" style="color:var(--danger);">Excluir</button>
           </div>
         </div>
 
@@ -198,6 +200,35 @@
         if (newName && newName !== c.company_name) {
           supabase.from('clients').update({ company_name: newName }).eq('id', c.id).then(load);
         }
+      });
+
+      $('#btn-archive')?.addEventListener('click', async () => {
+        const isArchived = c.status === 'archived';
+        const newStatus = isArchived ? 'pending' : 'archived';
+        const action = isArchived ? 'desarquivar' : 'arquivar';
+        if (!confirm(`Tem certeza que quer ${action} "${c.company_name}"?`)) return;
+        const { error } = await supabase.from('clients')
+          .update({ status: newStatus })
+          .eq('id', c.id);
+        if (error) { toast('Erro: ' + error.message, 'error'); return; }
+        toast(`Cliente ${isArchived ? 'desarquivado' : 'arquivado'}`, 'success');
+        await load();
+      });
+
+      $('#btn-delete')?.addEventListener('click', async () => {
+        const confirmName = prompt(
+          `⚠️ Excluir "${c.company_name}" permanentemente?\n\n` +
+          `Isso vai remover o cliente, todos os links de briefing, todas as respostas e o histórico de atividade.\n\n` +
+          `Digite o nome da empresa exatamente como aparece pra confirmar:`
+        );
+        if (confirmName !== c.company_name) {
+          if (confirmName != null) toast('Nome não confere — exclusão cancelada', 'warning');
+          return;
+        }
+        const { error } = await supabase.from('clients').delete().eq('id', c.id);
+        if (error) { toast('Erro ao excluir: ' + error.message, 'error'); return; }
+        toast('Cliente excluído', 'success');
+        setTimeout(() => { window.location.href = '/admin/clientes.html'; }, 800);
       });
     }
 
