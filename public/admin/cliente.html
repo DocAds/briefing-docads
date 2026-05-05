@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Cliente — Briefing DocAds</title>
+  <link rel="icon" type="image/png" href="/assets/img/favicon.png">
+  <link rel="stylesheet" href="/assets/css/app.css">
+</head>
+<body>
+  <div class="admin-shell">
+    <main class="admin-main">
+      <div class="container">
+        <a href="/admin/clientes.html" class="text-sm text-muted" style="display:inline-block;margin-bottom:16px;">← Voltar para clientes</a>
+        <div id="client-detail">
+          <div class="text-muted">Carregando...</div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/assets/js/config.js"></script>
+  <script type="module">
+    import { mountAdminShell } from '/assets/js/admin-shell.js';
+    import { supabase, generateBriefingSlug } from '/assets/js/supabase.js';
+    import { $, escapeHtml, formatDate, statusBadge, statusLabel, toast, copyToClipboard, getQueryParam } from '/assets/js/utils.js';
+
+    await mountAdminShell('clientes');
+
+    const cfg = window.DOCADS_CONFIG;
+    const PUBLIC_URL = cfg.PUBLIC_URL || window.location.origin;
+    const id = getQueryParam('id');
+    if (!id) { window.location.href = '/admin/clientes.html'; }
+
+    async function load() {
+      const { data: client, error } = await supabase
+        .from('clients')
+        .select(`
+          *,
+          briefing_links(id, slug, is_active, expires_at, access_count, last_accessed_at, created_at),
+          briefings(id, status, progress, current_step, submitted_at, created_at, updated_at)
+        `)
+        .eq('id', id)
+        .single();
+
+      if (error || !client) { toast('Cliente não encontrado', 'error'); return; }
+
+      const { data: activity } = await supabase
+        .from('activity_log')
+        .select('action, meta, created_at')
+        .eq('client_id', id)
+        .order('created_at', { ascending: false })
+        .limit(20);
+
+      render(client, activity || []);
+    }
+
+    function render(c, activity) {
+      const activeLink = c.briefing_links?.find(l => l.is_active);
+      const briefings = (c.briefings || []).sort((a, b) =>
+        new Date(b.created_at) - new Date(a.created_at)
+      );
+
+      $('#client-detail').innerHTML = `
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">${escapeHtml(c.company_name)}</h1>
+            <p class="page-subtitle">${escapeHtml(c.segment || 'Sem segmento informado')} · ${statusBadge(c.status)}</p>
+          </div>
+          <div style="display:flex;gap:8px;">
+            ${!activeLink && !briefings.find(b => b.status === 'submitted')
+              ? `<button class="btn btn-gradient" id="btn-genlink">+ Gerar link de briefing</button>`
+              : ''
+            }
+            <button class="btn btn-outline" id="btn-edit">Editar</button>
+          </div>
+        </div>
+
+        <div class="row" style="align-items:flex-start;">
+          <div style="flex:2;">
+            <div class="card">
+              <div class="card-header"><h3 class="card-title">Dados do cliente</h3></div>
+              <table style="width:100%;">
+                ${row('Razão social', c.company_name)}
+                ${row('Contato', c.contact_name)}
+                ${row('E-mail', c.contact_email ? `<a href="mailto:${escapeHtml(c.contact_email)}">${escapeHtml(c.contact_email)}</a>` : '—', true)}
+                ${row('Telefone', c.contact_phone)}
+                ${row('CNPJ', c.cnpj)}
+                ${row('Segmento', c.segment)}
+                ${row('Status', statusBadge(c.status), true)}
+                ${row('Cadastrado', formatDate(c.created_at))}
+              </table>
+              ${c.internal_notes ? `<div style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);"><div class="text-sm text-muted" style="margin-bottom:6px;">Notas internas</div><div>${escapeHtml(c.internal_notes)}</div></div>` : ''}
+            </div>
+
+            <div class="card" style="margin-top:24px;">
+              <div class="card-header"><h3 class="card-title">Briefings</h3></div>
+              ${briefings.length === 0
+                ? '<div class="text-muted">Nenhum briefing iniciado ainda.</div>'
+                : `<table class="table" style="border:none;box-shadow:none;">
+                    <thead><tr><th>Status</th><th>Progresso</th><th>Submetido</th><th></th></tr></thead>
+                    <tbody>
+                      ${briefings.map(b => `
+                        <tr onclick="location.href='/admin/briefing.html?id=${b.id}'">
+                          <td>${statusBadge(b.status)}</td>
+                          <td>
+                            <div style="display:flex;align-items:center;gap:8px;max-width:200px;">
+                              <div style="flex:1;height:6px;background:var(--surface-2);border-radius:100px;overflow:hidden;">
+                                <div style="width:${b.progress}%;height:100%;background:var(--docads-gradient);"></div>
+                              </div>
+                              <span class="text-sm text-muted">${b.progress}%</span>
+                            </div>
+                          </td>
+                          <td class="text-sm text-muted">${b.submitted_at ? formatDate(b.submitted_at) : '—'}</td>
+                          <td><a href="/admin/briefing.html?id=${b.id}" class="btn btn-ghost btn-sm">Ver →</a></td>
+                        </tr>
+                      `).join('')}
+                    </tbody>
+                  </table>`
+              }
+            </div>
+
+            <div class="card" style="margin-top:24px;">
+              <div class="card-header"><h3 class="card-title">Atividade</h3></div>
+              ${activity.length === 0
+                ? '<div class="text-muted text-sm">Nenhuma atividade.</div>'
+                : `<ul style="list-style:none;padding:0;margin:0;">
+                    ${activity.map(a => `
+                      <li style="padding:10px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;">
+                        <span class="text-sm">${escapeHtml(actionLabel(a.action))}</span>
+                        <span class="text-sm text-muted">${formatDate(a.created_at)}</span>
+                      </li>
+                    `).join('')}
+                  </ul>`
+              }
+            </div>
+          </div>
+
+          <div style="flex:1;min-width:280px;">
+            ${activeLink ? `
+              <div class="card">
+                <div class="card-header"><h3 class="card-title">Link ativo</h3></div>
+                <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:12px;font-family:monospace;font-size:12px;word-break:break-all;margin-bottom:12px;">
+                  ${PUBLIC_URL}/b/${escapeHtml(activeLink.slug)}
+                </div>
+                <div style="display:flex;gap:8px;flex-direction:column;">
+                  <button class="btn btn-primary btn-block" id="btn-copy">📋 Copiar link</button>
+                  <a class="btn btn-outline btn-block" href="${PUBLIC_URL}/b/${escapeHtml(activeLink.slug)}" target="_blank">↗ Abrir como cliente</a>
+                  <button class="btn btn-ghost btn-block" id="btn-deactivate" style="color:var(--danger);">Desativar link</button>
+                </div>
+                <div class="text-sm text-muted" style="margin-top:16px;padding-top:16px;border-top:1px solid var(--border);">
+                  ${activeLink.access_count > 0
+                    ? `Acessado ${activeLink.access_count}× · último em ${formatDate(activeLink.last_accessed_at)}`
+                    : 'Ainda não foi acessado'}
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        </div>
+      `;
+
+      attachListeners(c, activeLink);
+    }
+
+    function row(label, value, html = false) {
+      return `<tr><td style="padding:8px 0;color:var(--text-muted);font-size:13px;width:140px;vertical-align:top;">${label}</td><td style="padding:8px 0;font-size:14px;">${html ? value : escapeHtml(value || '—')}</td></tr>`;
+    }
+
+    function attachListeners(c, activeLink) {
+      $('#btn-genlink')?.addEventListener('click', async () => {
+        try {
+          const slug = await generateBriefingSlug(c.company_name);
+          await supabase.from('briefing_links').insert({
+            client_id: c.id, slug, is_active: true
+          });
+          await supabase.from('activity_log').insert({
+            client_id: c.id, action: 'link_generated', meta: { slug }
+          });
+          toast('Link gerado!', 'success');
+          await load();
+        } catch (e) { console.error(e); toast('Erro ao gerar link', 'error'); }
+      });
+
+      $('#btn-copy')?.addEventListener('click', () => {
+        if (activeLink) copyToClipboard(`${PUBLIC_URL}/b/${activeLink.slug}`);
+      });
+
+      $('#btn-deactivate')?.addEventListener('click', async () => {
+        if (!confirm('Desativar o link? O cliente não poderá mais acessá-lo.')) return;
+        await supabase.from('briefing_links').update({ is_active: false }).eq('id', activeLink.id);
+        toast('Link desativado', 'success');
+        await load();
+      });
+
+      $('#btn-edit')?.addEventListener('click', () => {
+        const newName = prompt('Nome da empresa:', c.company_name);
+        if (newName && newName !== c.company_name) {
+          supabase.from('clients').update({ company_name: newName }).eq('id', c.id).then(load);
+        }
+      });
+    }
+
+    function actionLabel(a) {
+      return {
+        briefing_submitted: '✓ Briefing concluído pelo cliente',
+        client_created: '+ Cliente cadastrado',
+        link_generated: '🔗 Link de briefing gerado',
+        briefing_analyzed: '📊 Briefing marcado como analisado'
+      }[a] || a;
+    }
+
+    await load();
+  </script>
+</body>
+</html>

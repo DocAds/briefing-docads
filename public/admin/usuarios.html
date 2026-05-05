@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Usuários — DocAds</title>
+  <link rel="icon" type="image/png" href="/assets/img/favicon.png">
+  <link rel="stylesheet" href="/assets/css/app.css">
+</head>
+<body>
+  <div class="admin-shell">
+    <main class="admin-main">
+      <div class="container">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Usuários admin</h1>
+            <p class="page-subtitle">Membros da equipe DocAds com acesso ao painel</p>
+          </div>
+        </div>
+
+        <div class="card" style="border-left: 4px solid var(--info); margin-bottom: 24px;">
+          <p style="margin:0;font-size:14px;">
+            <strong>ℹ Como adicionar um novo usuário admin:</strong><br>
+            <span class="text-muted">1. No <a href="https://supabase.com/dashboard/project/saomjqnbiovwtpghbdkt/auth/users" target="_blank">Supabase Auth → Users</a>, crie o usuário com e-mail e senha.<br>
+            2. Depois rode no <a href="https://supabase.com/dashboard/project/saomjqnbiovwtpghbdkt/sql/new" target="_blank">SQL Editor</a>:</span>
+          </p>
+          <pre style="background:var(--surface-2);padding:12px;border-radius:8px;font-size:12px;margin-top:8px;overflow:auto;">insert into public.admins (id, full_name, role)
+select id, 'Nome Completo', 'admin'
+from auth.users where email = 'novo@docads.com.br';</pre>
+        </div>
+
+        <div class="card" style="padding: 0;">
+          <div id="users-table"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/assets/js/config.js"></script>
+  <script type="module">
+    import { mountAdminShell } from '/assets/js/admin-shell.js';
+    import { supabase } from '/assets/js/supabase.js';
+    import { $, escapeHtml, formatDate, toast } from '/assets/js/utils.js';
+
+    const profile = await mountAdminShell('usuarios');
+    const isOwner = profile.role === 'owner';
+
+    async function load() {
+      const { data, error } = await supabase
+        .from('admins')
+        .select('id, full_name, role, is_active, created_at')
+        .order('created_at', { ascending: true });
+
+      if (error) { console.error(error); return; }
+
+      $('#users-table').innerHTML = `
+        <table class="table">
+          <thead><tr>
+            <th>Nome</th><th>Papel</th><th>Status</th><th>Cadastrado</th>${isOwner ? '<th></th>' : ''}
+          </tr></thead>
+          <tbody>
+            ${data.map(u => `
+              <tr>
+                <td>
+                  <strong>${escapeHtml(u.full_name)}</strong>
+                  ${u.id === profile.id ? '<span class="text-sm text-muted"> (você)</span>' : ''}
+                </td>
+                <td>
+                  <span class="badge ${u.role === 'owner' ? 'badge-analyzed' : 'badge-progress'}">${escapeHtml(u.role)}</span>
+                </td>
+                <td>
+                  <span class="badge ${u.is_active ? 'badge-completed' : 'badge-archived'}">${u.is_active ? 'Ativo' : 'Inativo'}</span>
+                </td>
+                <td class="text-sm text-muted">${formatDate(u.created_at)}</td>
+                ${isOwner && u.id !== profile.id ? `
+                  <td>
+                    <button class="btn btn-ghost btn-sm" onclick="window.toggleUser('${u.id}', ${!u.is_active})">${u.is_active ? 'Desativar' : 'Reativar'}</button>
+                  </td>
+                ` : isOwner ? '<td></td>' : ''}
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    window.toggleUser = async (id, active) => {
+      const { error } = await supabase.from('admins').update({ is_active: active }).eq('id', id);
+      if (error) { toast('Erro: ' + error.message, 'error'); return; }
+      toast('Atualizado', 'success');
+      await load();
+    };
+
+    await load();
+  </script>
+</body>
+</html>

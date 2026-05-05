@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Obrigado — DocAds</title>
+  <link rel="icon" type="image/png" href="/assets/img/favicon.png">
+  <link rel="stylesheet" href="/assets/css/app.css">
+</head>
+<body>
+  <div class="briefing-shell">
+    <div class="briefing-hero">
+      <div class="briefing-hero-content">
+        <img src="/assets/img/logo.png" alt="DocAds" style="height: 32px; filter: brightness(0) invert(1); margin-bottom: 24px;">
+      </div>
+    </div>
+
+    <div class="briefing-content">
+      <div class="success-card">
+        <div class="success-icon">✓</div>
+        <h1>Briefing recebido!</h1>
+        <p class="text-muted" style="font-size: 17px; max-width: 480px; margin: 16px auto 32px auto;">
+          Obrigado pelo cuidado em responder. Sua estratégia já está em construção — em breve a equipe DocAds entrará em contato pelos canais que você indicou.
+        </p>
+        <a href="https://docads.com.br" class="btn btn-gradient btn-lg">Conhecer a DocAds →</a>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    // Limpa parâmetros sensíveis da URL
+    const params = new URLSearchParams(window.location.search);
+    const c = params.get('c');
+    if (c) {
+      document.querySelector('h1').textContent = `Obrigado, ${c}!`;
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Briefing — DocAds</title>
+  <link rel="icon" type="image/png" href="/assets/img/favicon.png">
+  <link rel="stylesheet" href="/assets/css/app.css">
+  <style>
+    .answer-block { padding: 16px 0; border-bottom: 1px solid var(--border); }
+    .answer-block:last-child { border-bottom: none; }
+    .answer-label { font-size: 13px; color: var(--text-muted); margin-bottom: 4px; }
+    .answer-value { color: var(--text); white-space: pre-wrap; }
+    .answer-empty { color: var(--text-subtle); font-style: italic; font-size: 13px; }
+    .block-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 28px; margin-bottom: 20px; }
+    .block-title { font-size: 20px; margin-bottom: 4px; color: var(--docads-navy); }
+    .block-desc { color: var(--text-muted); font-size: 14px; margin-bottom: 20px; }
+    @media print {
+      .topbar, .actions-bar, .no-print { display: none !important; }
+      body { background: white; }
+      .block-card { page-break-inside: avoid; box-shadow: none; border: 1px solid #ccc; }
+    }
+  </style>
+</head>
+<body>
+  <div class="admin-shell">
+    <main class="admin-main">
+      <div class="container-narrow">
+        <div class="actions-bar no-print" style="margin-bottom: 16px;">
+          <a href="javascript:history.back()" class="text-sm text-muted">← Voltar</a>
+        </div>
+        <div id="briefing-detail">
+          <div class="text-muted">Carregando...</div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/assets/js/config.js"></script>
+  <script type="module">
+    import { mountAdminShell } from '/assets/js/admin-shell.js';
+    import { supabase } from '/assets/js/supabase.js';
+    import { BRIEFING_STEPS, getFieldDef } from '/assets/js/briefing-schema.js';
+    import { $, escapeHtml, formatDate, statusBadge, toast, getQueryParam } from '/assets/js/utils.js';
+
+    await mountAdminShell('briefings');
+
+    const id = getQueryParam('id');
+    if (!id) { window.location.href = '/admin/briefings.html'; }
+
+    async function load() {
+      const { data: b, error } = await supabase
+        .from('briefings')
+        .select(`*, client:clients(id, company_name, contact_name, contact_email, contact_phone, segment, cnpj)`)
+        .eq('id', id)
+        .single();
+
+      if (error || !b) { toast('Briefing não encontrado', 'error'); return; }
+
+      render(b);
+    }
+
+    function render(b) {
+      const c = b.client;
+      const answers = b.answers || {};
+
+      $('#briefing-detail').innerHTML = `
+        <div class="page-header no-print">
+          <div>
+            <h1 class="page-title" style="font-size:24px;">${escapeHtml(c.company_name)}</h1>
+            <p class="page-subtitle">${statusBadge(b.status)} · ${b.progress}% · ${b.submitted_at ? 'Submetido ' + formatDate(b.submitted_at) : 'Última edição ' + formatDate(b.updated_at)}</p>
+          </div>
+          <div style="display:flex;gap:8px;">
+            <button class="btn btn-outline" onclick="window.print()">🖨️ Imprimir / PDF</button>
+            ${b.status === 'submitted' ? `<button class="btn btn-primary" id="btn-mark-analyzed">Marcar como analisado</button>` : ''}
+            <a href="/admin/cliente.html?id=${c.id}" class="btn btn-ghost">Ver cliente</a>
+          </div>
+        </div>
+
+        <!-- Cabeçalho do briefing pra impressão -->
+        <div style="text-align:center;margin-bottom:32px;padding-bottom:24px;border-bottom:2px solid var(--docads-navy);">
+          <img src="/assets/img/logo.png" alt="DocAds" style="height:32px;margin-bottom:16px;">
+          <h2 style="font-size:24px;color:var(--docads-navy);">Briefing — ${escapeHtml(c.company_name)}</h2>
+          <p class="text-muted text-sm" style="margin-top:8px;">
+            ${c.contact_name ? escapeHtml(c.contact_name) + ' · ' : ''}
+            ${c.contact_email ? escapeHtml(c.contact_email) + ' · ' : ''}
+            ${b.submitted_at ? 'Submetido em ' + formatDate(b.submitted_at) : 'Em rascunho'}
+          </p>
+        </div>
+
+        ${BRIEFING_STEPS.map((step, idx) => `
+          <div class="block-card">
+            <h3 class="block-title">${idx + 1}. ${escapeHtml(step.title)}</h3>
+            <p class="block-desc">${escapeHtml(step.desc)}</p>
+            ${step.fields.map(f => renderAnswer(f, answers[f.id])).join('')}
+          </div>
+        `).join('')}
+
+        <div class="card no-print" style="margin-top:24px;">
+          <div class="card-header"><h3 class="card-title">JSON bruto</h3></div>
+          <pre style="background:var(--surface-2);padding:16px;border-radius:8px;font-size:12px;overflow:auto;max-height:400px;">${escapeHtml(JSON.stringify(answers, null, 2))}</pre>
+        </div>
+      `;
+
+      $('#btn-mark-analyzed')?.addEventListener('click', async () => {
+        await supabase.from('briefings')
+          .update({ status: 'analyzed', analyzed_at: new Date().toISOString() })
+          .eq('id', b.id);
+        await supabase.from('clients')
+          .update({ status: 'analyzed' })
+          .eq('id', c.id);
+        await supabase.from('activity_log').insert({
+          client_id: c.id, briefing_id: b.id, action: 'briefing_analyzed'
+        });
+        toast('Marcado como analisado', 'success');
+        await load();
+      });
+    }
+
+    function renderAnswer(field, value) {
+      const isEmpty = value == null || value === '' || (Array.isArray(value) && value.length === 0);
+      const display = isEmpty
+        ? '<span class="answer-empty">— não respondido</span>'
+        : Array.isArray(value)
+          ? value.map(v => `<span class="badge" style="margin:2px 4px 2px 0;background:var(--surface-2);color:var(--text);">${escapeHtml(v)}</span>`).join('')
+          : `<div class="answer-value">${escapeHtml(value)}</div>`;
+
+      return `
+        <div class="answer-block">
+          <div class="answer-label">${escapeHtml(field.label)}</div>
+          ${display}
+        </div>
+      `;
+    }
+
+    await load();
+  </script>
+</body>
+</html>

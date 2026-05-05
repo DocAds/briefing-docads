@@ -1,0 +1,287 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Clientes — Briefing DocAds</title>
+  <link rel="icon" type="image/png" href="/assets/img/favicon.png">
+  <link rel="stylesheet" href="/assets/css/app.css">
+</head>
+<body>
+  <div class="admin-shell">
+    <main class="admin-main">
+      <div class="container">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Clientes</h1>
+            <p class="page-subtitle">Cadastre clientes e gere links de briefing</p>
+          </div>
+          <button class="btn btn-gradient" id="btn-new">+ Novo cliente</button>
+        </div>
+
+        <div class="card" style="padding: 0;">
+          <div style="padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; gap: 12px; align-items: center;">
+            <input class="input" type="search" id="search" placeholder="Buscar por nome..." style="max-width:300px;">
+            <select class="select" id="filter-status" style="max-width:200px;">
+              <option value="">Todos os status</option>
+              <option value="pending">Aguardando</option>
+              <option value="in_progress">Em andamento</option>
+              <option value="completed">Concluídos</option>
+              <option value="analyzed">Analisados</option>
+              <option value="archived">Arquivados</option>
+            </select>
+          </div>
+          <div id="clients-table"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal: novo cliente -->
+  <div class="modal-backdrop hidden" id="modal-new">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Novo cliente</h3>
+        <button class="modal-close" data-close>×</button>
+      </div>
+      <form id="form-new" class="stack">
+        <div class="field">
+          <label class="field-label field-required">Nome da empresa</label>
+          <input class="input" name="company_name" required>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label class="field-label">Pessoa de contato</label>
+            <input class="input" name="contact_name">
+          </div>
+          <div class="field">
+            <label class="field-label">CNPJ</label>
+            <input class="input" name="cnpj">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label class="field-label">E-mail</label>
+            <input class="input" type="email" name="contact_email">
+          </div>
+          <div class="field">
+            <label class="field-label">Telefone</label>
+            <input class="input" type="tel" name="contact_phone">
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Segmento</label>
+          <input class="input" name="segment" placeholder="Ex: imobiliária, autopeças, clínica...">
+        </div>
+        <div class="field">
+          <label class="field-label">Notas internas</label>
+          <textarea class="textarea" name="internal_notes" rows="3"></textarea>
+        </div>
+        <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:8px;">
+          <button type="button" class="btn btn-ghost" data-close>Cancelar</button>
+          <button type="submit" class="btn btn-primary">Criar cliente</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: link gerado -->
+  <div class="modal-backdrop hidden" id="modal-link">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Link de briefing gerado</h3>
+        <button class="modal-close" data-close>×</button>
+      </div>
+      <p class="text-muted text-sm">Envie esse link para o cliente. Ele será desativado automaticamente após o envio do briefing.</p>
+      <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin:16px 0;font-family:'JetBrains Mono',monospace;font-size:13px;word-break:break-all;" id="link-text"></div>
+      <div style="display:flex;gap:12px;">
+        <button class="btn btn-primary btn-block" id="btn-copy">📋 Copiar link</button>
+        <a class="btn btn-outline btn-block" id="btn-open" target="_blank">↗ Abrir</a>
+      </div>
+    </div>
+  </div>
+
+  <script src="/assets/js/config.js"></script>
+  <script type="module">
+    import { mountAdminShell } from '/assets/js/admin-shell.js';
+    import { supabase, generateBriefingSlug } from '/assets/js/supabase.js';
+    import { $, escapeHtml, formatDate, statusBadge, toast, copyToClipboard, debounce } from '/assets/js/utils.js';
+
+    await mountAdminShell('clientes');
+
+    const cfg = window.DOCADS_CONFIG;
+    const PUBLIC_URL = cfg.PUBLIC_URL || window.location.origin;
+
+    let allClients = [];
+
+    async function loadClients() {
+      const { data, error } = await supabase
+        .from('clients')
+        .select(`
+          id, company_name, contact_name, contact_email, segment, status, created_at,
+          briefing_links(id, slug, is_active),
+          briefings(id, status, progress, submitted_at)
+        `)
+        .order('created_at', { ascending: false });
+
+      if (error) { console.error(error); toast('Erro ao carregar clientes', 'error'); return; }
+      allClients = data || [];
+      renderTable();
+    }
+
+    function renderTable() {
+      const search = $('#search').value.toLowerCase();
+      const status = $('#filter-status').value;
+
+      const filtered = allClients.filter(c => {
+        if (status && c.status !== status) return false;
+        if (search && !c.company_name.toLowerCase().includes(search) &&
+            !(c.contact_name || '').toLowerCase().includes(search)) return false;
+        return true;
+      });
+
+      if (filtered.length === 0) {
+        $('#clients-table').innerHTML = `
+          <div class="empty-state">
+            <p>${allClients.length === 0 ? 'Nenhum cliente cadastrado ainda.' : 'Nenhum cliente encontrado com esses filtros.'}</p>
+            ${allClients.length === 0 ? '<button class="btn btn-gradient" onclick="document.getElementById(\'btn-new\').click()" style="margin-top:16px;">+ Cadastrar primeiro cliente</button>' : ''}
+          </div>
+        `;
+        return;
+      }
+
+      $('#clients-table').innerHTML = `
+        <table class="table">
+          <thead>
+            <tr>
+              <th>Empresa</th><th>Contato</th><th>Status</th><th>Briefing</th><th>Cadastrado</th><th></th>
+            </tr>
+          </thead>
+          <tbody>
+            ${filtered.map(c => {
+              const activeLink = c.briefing_links?.find(l => l.is_active);
+              const briefing = c.briefings?.[0];
+              return `
+                <tr onclick="location.href='/admin/cliente.html?id=${c.id}'">
+                  <td>
+                    <strong>${escapeHtml(c.company_name)}</strong>
+                    ${c.segment ? `<div class="text-sm text-muted">${escapeHtml(c.segment)}</div>` : ''}
+                  </td>
+                  <td>
+                    ${c.contact_name ? `<div>${escapeHtml(c.contact_name)}</div>` : ''}
+                    ${c.contact_email ? `<div class="text-sm text-muted">${escapeHtml(c.contact_email)}</div>` : ''}
+                  </td>
+                  <td>${statusBadge(c.status)}</td>
+                  <td>
+                    ${briefing ? `${briefing.progress}% ${briefing.submitted_at ? '✓' : ''}` : (activeLink ? '🔗 Link ativo' : '—')}
+                  </td>
+                  <td class="text-sm text-muted">${formatDate(c.created_at)}</td>
+                  <td onclick="event.stopPropagation()">
+                    ${activeLink
+                      ? `<button class="btn btn-ghost btn-sm" onclick="window.showLink('${activeLink.slug}')">📋 Link</button>`
+                      : !briefing?.submitted_at
+                        ? `<button class="btn btn-ghost btn-sm" onclick="window.genLink('${c.id}','${escapeHtml(c.company_name)}')">+ Gerar link</button>`
+                        : ''
+                    }
+                  </td>
+                </tr>
+              `;
+            }).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    // Gera novo link
+    window.genLink = async (clientId, companyName) => {
+      try {
+        const slug = await generateBriefingSlug(companyName);
+        const { data, error } = await supabase
+          .from('briefing_links')
+          .insert({ client_id: clientId, slug, is_active: true })
+          .select()
+          .single();
+        if (error) throw error;
+
+        await supabase.from('activity_log').insert({
+          client_id: clientId, action: 'link_generated', meta: { slug }
+        });
+
+        showLinkModal(slug);
+        await loadClients();
+      } catch (e) {
+        console.error(e);
+        toast('Erro ao gerar link', 'error');
+      }
+    };
+
+    window.showLink = (slug) => showLinkModal(slug);
+
+    function showLinkModal(slug) {
+      const url = `${PUBLIC_URL}/b/${slug}`;
+      $('#link-text').textContent = url;
+      $('#btn-open').href = url;
+      $('#modal-link').classList.remove('hidden');
+      $('#btn-copy').onclick = () => copyToClipboard(url);
+    }
+
+    // Modal handlers
+    document.querySelectorAll('[data-close]').forEach(b => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('.modal-backdrop').forEach(m => m.classList.add('hidden'));
+      });
+    });
+    document.querySelectorAll('.modal-backdrop').forEach(m => {
+      m.addEventListener('click', e => { if (e.target === m) m.classList.add('hidden'); });
+    });
+
+    $('#btn-new').addEventListener('click', () => {
+      $('#modal-new').classList.remove('hidden');
+    });
+
+    $('#form-new').addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const fd = new FormData(e.target);
+      const payload = Object.fromEntries(fd.entries());
+      Object.keys(payload).forEach(k => { if (!payload[k]) delete payload[k]; });
+
+      try {
+        const { data, error } = await supabase
+          .from('clients')
+          .insert({ ...payload, status: 'pending' })
+          .select()
+          .single();
+        if (error) throw error;
+
+        await supabase.from('activity_log').insert({
+          client_id: data.id, action: 'client_created'
+        });
+
+        // Já gera link automaticamente
+        const slug = await generateBriefingSlug(data.company_name);
+        await supabase.from('briefing_links').insert({
+          client_id: data.id, slug, is_active: true
+        });
+        await supabase.from('activity_log').insert({
+          client_id: data.id, action: 'link_generated', meta: { slug }
+        });
+
+        $('#modal-new').classList.add('hidden');
+        e.target.reset();
+        toast('Cliente criado e link gerado!', 'success');
+        showLinkModal(slug);
+        await loadClients();
+      } catch (err) {
+        console.error(err);
+        toast('Erro ao criar cliente', 'error');
+      }
+    });
+
+    $('#search').addEventListener('input', debounce(renderTable, 200));
+    $('#filter-status').addEventListener('change', renderTable);
+
+    await loadClients();
+  </script>
+</body>
+</html>

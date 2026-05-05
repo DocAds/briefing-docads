@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Briefings — DocAds</title>
+  <link rel="icon" type="image/png" href="/assets/img/favicon.png">
+  <link rel="stylesheet" href="/assets/css/app.css">
+</head>
+<body>
+  <div class="admin-shell">
+    <main class="admin-main">
+      <div class="container">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Briefings</h1>
+            <p class="page-subtitle">Todas as respostas recebidas</p>
+          </div>
+        </div>
+
+        <div class="card" style="padding: 0;">
+          <div style="padding: 16px 24px; border-bottom: 1px solid var(--border); display: flex; gap: 12px;">
+            <select class="select" id="filter-status" style="max-width:240px;">
+              <option value="">Todos os status</option>
+              <option value="draft">Em rascunho</option>
+              <option value="submitted">Submetidos (não analisados)</option>
+              <option value="analyzed">Analisados</option>
+            </select>
+          </div>
+          <div id="table-wrap"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/assets/js/config.js"></script>
+  <script type="module">
+    import { mountAdminShell } from '/assets/js/admin-shell.js';
+    import { supabase } from '/assets/js/supabase.js';
+    import { $, escapeHtml, formatDate, statusBadge } from '/assets/js/utils.js';
+
+    await mountAdminShell('briefings');
+
+    let allBriefings = [];
+
+    async function load() {
+      const { data, error } = await supabase
+        .from('briefings')
+        .select(`id, status, progress, submitted_at, updated_at, created_at, client:clients(id, company_name, contact_name, segment)`)
+        .order('updated_at', { ascending: false });
+      if (error) { console.error(error); return; }
+      allBriefings = data || [];
+      render();
+    }
+
+    function render() {
+      const status = $('#filter-status').value;
+      const filtered = status ? allBriefings.filter(b => b.status === status) : allBriefings;
+
+      if (filtered.length === 0) {
+        $('#table-wrap').innerHTML = '<div class="empty-state">Nenhum briefing encontrado.</div>';
+        return;
+      }
+
+      $('#table-wrap').innerHTML = `
+        <table class="table">
+          <thead><tr>
+            <th>Cliente</th><th>Status</th><th>Progresso</th><th>Atualizado</th><th>Submetido</th><th></th>
+          </tr></thead>
+          <tbody>
+            ${filtered.map(b => `
+              <tr onclick="location.href='/admin/briefing.html?id=${b.id}'">
+                <td>
+                  <strong>${escapeHtml(b.client?.company_name || '—')}</strong>
+                  ${b.client?.segment ? `<div class="text-sm text-muted">${escapeHtml(b.client.segment)}</div>` : ''}
+                </td>
+                <td>${statusBadge(b.status)}</td>
+                <td>
+                  <div style="display:flex;align-items:center;gap:8px;max-width:160px;">
+                    <div style="flex:1;height:6px;background:var(--surface-2);border-radius:100px;overflow:hidden;">
+                      <div style="width:${b.progress}%;height:100%;background:var(--docads-gradient);"></div>
+                    </div>
+                    <span class="text-sm">${b.progress}%</span>
+                  </div>
+                </td>
+                <td class="text-sm text-muted">${formatDate(b.updated_at)}</td>
+                <td class="text-sm text-muted">${b.submitted_at ? formatDate(b.submitted_at) : '—'}</td>
+                <td><a href="/admin/briefing.html?id=${b.id}" class="btn btn-ghost btn-sm">Ver →</a></td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      `;
+    }
+
+    $('#filter-status').addEventListener('change', render);
+    await load();
+  </script>
+</body>
+</html>

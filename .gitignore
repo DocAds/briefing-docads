@@ -1,0 +1,9 @@
+.DS_Store
+*.log
+.env
+.env.local
+.vscode/
+.idea/
+node_modules/
+.supabase/
+public/assets/js/config.local.js

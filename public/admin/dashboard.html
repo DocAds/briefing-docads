@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="robots" content="noindex,nofollow">
+  <title>Dashboard — Briefing DocAds</title>
+  <link rel="icon" type="image/png" href="/assets/img/favicon.png">
+  <link rel="stylesheet" href="/assets/css/app.css">
+</head>
+<body>
+  <div class="admin-shell">
+    <main class="admin-main">
+      <div class="container">
+        <div class="page-header">
+          <div>
+            <h1 class="page-title">Dashboard</h1>
+            <p class="page-subtitle">Visão geral dos briefings e clientes</p>
+          </div>
+          <a href="/admin/clientes.html" class="btn btn-gradient">+ Novo cliente</a>
+        </div>
+
+        <div class="stat-grid" id="stats">
+          <div class="stat-card">
+            <div class="stat-label">Carregando...</div>
+            <div class="stat-value">—</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 32px;">
+          <div class="card-header">
+            <h3 class="card-title">Briefings recentes</h3>
+            <a href="/admin/briefings.html" class="btn btn-ghost btn-sm">Ver todos →</a>
+          </div>
+          <div id="recent-briefings">
+            <div class="text-muted text-sm" style="padding: 16px;">Carregando...</div>
+          </div>
+        </div>
+
+        <div class="card" style="margin-top: 24px;">
+          <div class="card-header">
+            <h3 class="card-title">Atividade recente</h3>
+          </div>
+          <div id="activity">
+            <div class="text-muted text-sm" style="padding: 16px;">Carregando...</div>
+          </div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <script src="/assets/js/config.js"></script>
+  <script type="module">
+    import { mountAdminShell } from '/assets/js/admin-shell.js';
+    import { supabase, getDashboardStats } from '/assets/js/supabase.js';
+    import { $, escapeHtml, formatDate, statusBadge } from '/assets/js/utils.js';
+
+    await mountAdminShell('dashboard');
+
+    // Stats
+    try {
+      const stats = await getDashboardStats();
+      $('#stats').innerHTML = `
+        <div class="stat-card">
+          <div class="stat-label">Total de clientes</div>
+          <div class="stat-value">${stats.total_clients}</div>
+          <div class="stat-trend">${stats.pending} aguardando preenchimento</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Em andamento</div>
+          <div class="stat-value">${stats.in_progress}</div>
+          <div class="stat-trend">Cliente abriu o link</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Concluídos</div>
+          <div class="stat-value">${stats.completed}</div>
+          <div class="stat-trend">${stats.submitted_last_7d} nos últimos 7 dias</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Taxa de conclusão</div>
+          <div class="stat-value">${stats.completion_rate}%</div>
+          <div class="stat-trend">Clientes que completaram</div>
+        </div>
+      `;
+    } catch (e) {
+      console.error(e);
+      $('#stats').innerHTML = '<div class="empty-state">Erro ao carregar estatísticas</div>';
+    }
+
+    // Recent briefings
+    try {
+      const { data: briefings } = await supabase
+        .from('briefings')
+        .select('id, status, submitted_at, created_at, progress, client:clients(id, company_name, contact_name)')
+        .order('updated_at', { ascending: false })
+        .limit(10);
+
+      if (!briefings || briefings.length === 0) {
+        $('#recent-briefings').innerHTML = '<div class="empty-state">Nenhum briefing ainda. <a href="/admin/clientes.html">Crie o primeiro cliente</a>.</div>';
+      } else {
+        $('#recent-briefings').innerHTML = `
+          <table class="table">
+            <thead>
+              <tr><th>Cliente</th><th>Status</th><th>Progresso</th><th>Atualizado</th><th></th></tr>
+            </thead>
+            <tbody>
+              ${briefings.map(b => `
+                <tr onclick="location.href='/admin/briefing.html?id=${b.id}'">
+                  <td>
+                    <strong>${escapeHtml(b.client?.company_name || '—')}</strong>
+                    ${b.client?.contact_name ? `<div class="text-sm text-muted">${escapeHtml(b.client.contact_name)}</div>` : ''}
+                  </td>
+                  <td>${statusBadge(b.status)}</td>
+                  <td>
+                    <div style="display:flex;align-items:center;gap:8px;">
+                      <div style="flex:1;height:6px;background:var(--surface-2);border-radius:100px;overflow:hidden;max-width:120px;">
+                        <div style="width:${b.progress}%;height:100%;background:var(--docads-gradient);"></div>
+                      </div>
+                      <span class="text-sm text-muted">${b.progress}%</span>
+                    </div>
+                  </td>
+                  <td class="text-sm text-muted">${formatDate(b.submitted_at || b.created_at)}</td>
+                  <td><a href="/admin/briefing.html?id=${b.id}" class="btn btn-ghost btn-sm">Ver →</a></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        `;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    // Activity log
+    try {
+      const { data: activity } = await supabase
+        .from('activity_log')
+        .select('id, action, meta, created_at, client:clients(company_name)')
+        .order('created_at', { ascending: false })
+        .limit(8);
+
+      if (!activity || activity.length === 0) {
+        $('#activity').innerHTML = '<div class="text-muted text-sm" style="padding:16px;">Sem atividade ainda.</div>';
+      } else {
+        $('#activity').innerHTML = `
+          <ul style="list-style:none;padding:0;margin:0;">
+            ${activity.map(a => `
+              <li style="padding:12px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:16px;">
+                <div>
+                  <strong>${escapeHtml(a.client?.company_name || '—')}</strong>
+                  <div class="text-sm text-muted">${escapeHtml(actionLabel(a.action))}</div>
+                </div>
+                <div class="text-sm text-muted" style="white-space:nowrap;">${formatDate(a.created_at)}</div>
+              </li>
+            `).join('')}
+          </ul>
+        `;
+      }
+    } catch (e) {
+      console.error(e);
+    }
+
+    function actionLabel(a) {
+      return {
+        briefing_submitted: '✓ Briefing concluído',
+        client_created: '+ Cliente criado',
+        link_generated: '🔗 Link gerado',
+        briefing_analyzed: '📊 Briefing analisado'
+      }[a] || a;
+    }
+  </script>
+</body>
+</html>
