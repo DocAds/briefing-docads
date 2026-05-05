@@ -183,13 +183,14 @@
                     ${briefing ? `${briefing.progress}% ${briefing.submitted_at ? '✓' : ''}` : (activeLink ? '🔗 Link ativo' : '—')}
                   </td>
                   <td class="text-sm text-muted">${formatDate(c.created_at)}</td>
-                  <td onclick="event.stopPropagation()">
+                  <td onclick="event.stopPropagation()" style="white-space:nowrap;">
                     ${activeLink
                       ? `<button class="btn btn-ghost btn-sm" onclick="window.showLink('${activeLink.slug}')">📋 Link</button>`
                       : !briefing?.submitted_at
-                        ? `<button class="btn btn-ghost btn-sm" onclick="window.genLink('${c.id}','${escapeHtml(c.company_name)}')">+ Gerar link</button>`
+                        ? `<button class="btn btn-ghost btn-sm" onclick="window.genLink('${c.id}','${escapeHtml(c.company_name).replace(/'/g, "\\'")}')">+ Gerar link</button>`
                         : ''
                     }
+                    <button class="btn btn-ghost btn-sm" onclick="window.deleteClient('${c.id}','${escapeHtml(c.company_name).replace(/'/g, "\\'")}')" style="color:var(--danger);" title="Excluir">🗑</button>
                   </td>
                 </tr>
               `;
@@ -223,6 +224,20 @@
     };
 
     window.showLink = (slug) => showLinkModal(slug);
+
+    // Exclui cliente (CASCADE remove links, briefings e logs)
+    window.deleteClient = async (clientId, companyName) => {
+      const ok = confirm(
+        `⚠️ Excluir "${companyName}" permanentemente?\n\n` +
+        `Vai remover o cliente, todos os links de briefing, todas as respostas e o histórico.\n\n` +
+        `Essa ação não pode ser desfeita. Confirmar?`
+      );
+      if (!ok) return;
+      const { error } = await supabase.from('clients').delete().eq('id', clientId);
+      if (error) { toast('Erro ao excluir: ' + error.message, 'error'); return; }
+      toast(`"${companyName}" excluído`, 'success');
+      await loadClients();
+    };
 
     function showLinkModal(slug) {
       const url = `${PUBLIC_URL}/b/${slug}`;

@@ -12,7 +12,11 @@ import { BRIEFING_STEPS, calculateProgress, shouldShowField } from './briefing-s
 import { $, debounce, escapeHtml, getQueryParam, toast } from './utils.js';
 import { applyMask, maskValue } from './masks.js';
 
-const slug = getQueryParam('c') || getQueryParam('slug');
+function extractSlugFromPath() {
+  const m = window.location.pathname.match(/\/b\/([a-z0-9-]+)\/?$/i);
+  return m ? m[1] : null;
+}
+const slug = getQueryParam('c') || getQueryParam('slug') || extractSlugFromPath();
 const state = {
   slug,
   clientName: '',
