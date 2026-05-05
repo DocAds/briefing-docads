@@ -215,8 +215,17 @@ export const BRIEFING_STEPS = [
                  'Inspiracional / motivacional'] },
       { id: 'tem_brandbook', type: 'radio', label: 'Tem brandbook ou manual de marca?',
         options: ['Sim, completo', 'Sim, parcial', 'Não, mas tem cores/fontes definidas', 'Não tem nada'] },
-      { id: 'cores_principais', type: 'text', label: 'Cores principais da marca',
-        placeholder: 'Ex: #0F0F4E (azul) e #00B4D8 (cyan)' },
+      { id: 'brandbook_tipo', type: 'radio', label: 'Como vai compartilhar o brandbook?',
+        options: ['Link do Drive', 'Upload de arquivo'],
+        showIf: { field: 'tem_brandbook', in: ['Sim, completo', 'Sim, parcial'] } },
+      { id: 'brandbook_link', type: 'url', label: 'Link do Drive com o brandbook',
+        placeholder: 'https://drive.google.com/...',
+        showIf: { field: 'brandbook_tipo', equals: 'Link do Drive' } },
+      { id: 'brandbook_arquivos', type: 'file', label: 'Upload do brandbook',
+        hint: 'Até 10 arquivos (PDF, imagem ou Word). Máximo 10MB cada.',
+        multiple: true, maxFiles: 10,
+        accept: '.pdf,.jpg,.jpeg,.png,.doc,.docx',
+        showIf: { field: 'brandbook_tipo', equals: 'Upload de arquivo' } },
       { id: 'palavras_proibidas', type: 'textarea',
         label: 'Tem palavras ou abordagens proibidas?',
         hint: 'O que NÃO podemos dizer ou fazer nos anúncios' },
@@ -256,27 +265,27 @@ export const BRIEFING_STEPS = [
     desc: 'Sem isso, a campanha sobe sem dados — e a gente não pode otimizar no escuro.',
     fields: [
       { id: 'tem_bm_meta', type: 'radio', label: 'Tem Business Manager (Meta)?',
-        options: ['Sim e tenho acesso', 'Sim mas não tenho acesso', 'Não tenho'] },
+        options: ['Sim e tenho acesso', 'Sim mas não tenho acesso', 'Não tenho', 'Não sei'] },
       { id: 'tem_google_ads', type: 'radio', label: 'Tem conta Google Ads?',
-        options: ['Sim e tenho acesso', 'Sim mas não tenho acesso', 'Não tenho'] },
+        options: ['Sim e tenho acesso', 'Sim mas não tenho acesso', 'Não tenho', 'Não sei'] },
       { id: 'tem_ga4', type: 'radio', label: 'GA4 instalado?',
-        options: ['Sim, configurado', 'Sim, mas sem certeza se funciona', 'Não'] },
+        options: ['Sim, configurado', 'Sim, mas sem certeza se funciona', 'Não', 'Não sei'] },
       { id: 'tem_gtm', type: 'radio', label: 'Google Tag Manager instalado?',
-        options: ['Sim, com acesso', 'Sim, sem acesso', 'Não'] },
+        options: ['Sim, com acesso', 'Sim, sem acesso', 'Não', 'Não sei'] },
       { id: 'tem_pixel_meta', type: 'radio', label: 'Pixel Meta instalado e disparando eventos?',
-        options: ['Sim, eventos OK', 'Sim, mas sem certeza dos eventos', 'Não'] },
+        options: ['Sim, eventos OK', 'Sim, mas sem certeza dos eventos', 'Não', 'Não sei'] },
       { id: 'pode_dar_acesso', type: 'radio', label: 'Pode dar acesso aos gerenciadores para nossa BM/MCC?',
-        options: ['Sim, na hora', 'Sim, com algumas semanas', 'Não, prefere conta nossa'], required: true },
+        options: ['Sim, na hora', 'Sim, com algumas semanas', 'Não, prefere conta nossa', 'Não sei'], required: true },
       { id: 'site_dominio', type: 'url', label: 'Domínio principal do site',
         placeholder: 'https://...' },
       { id: 'cms', type: 'text', label: 'Plataforma do site',
         placeholder: 'Ex: WordPress, Wix, Shopify, próprio, etc.' },
       { id: 'tem_landing_page', type: 'radio', label: 'Tem landing page específica para campanhas?',
-        options: ['Sim, várias', 'Sim, uma genérica', 'Não, usamos a home', 'Precisa criar'] },
+        options: ['Sim, várias', 'Sim, uma genérica', 'Não, usamos a home', 'Precisa criar', 'Não sei'] },
       { id: 'tem_whatsapp', type: 'tel', label: 'Número de WhatsApp para receber leads',
         placeholder: '(00) 00000-0000', mask: 'phone' },
       { id: 'whatsapp_business', type: 'radio', label: 'É WhatsApp Business?',
-        options: ['Sim, com API oficial', 'Sim, app comum', 'Não, é WhatsApp pessoal'] }
+        options: ['Sim, com API oficial', 'Sim, app comum', 'Não, é WhatsApp pessoal', 'Não sei'] }
     ]
   },
 
@@ -305,13 +314,47 @@ export const BRIEFING_STEPS = [
 // Total de campos para cálculo de progresso
 export const TOTAL_FIELDS = BRIEFING_STEPS.reduce((acc, s) => acc + s.fields.length, 0);
 
+// Decide se um campo condicional deve ser exibido com base nas respostas atuais.
+// Suporta: showIf: { field: 'X', equals: 'Y' } | { field: 'X', in: ['Y','Z'] }
+export function shouldShowField(field, answers) {
+  if (!field.showIf) return true;
+  const target = answers?.[field.showIf.field];
+  if (field.showIf.equals !== undefined) {
+    if (Array.isArray(target)) return target.includes(field.showIf.equals);
+    return target === field.showIf.equals;
+  }
+  if (field.showIf.in) {
+    if (Array.isArray(target)) return target.some(v => field.showIf.in.includes(v));
+    return field.showIf.in.includes(target);
+  }
+  return true;
+}
+
+// Conta campos visíveis (respeitando showIf) — base do cálculo de progresso
+export function countVisibleFields(answers) {
+  let total = 0;
+  for (const step of BRIEFING_STEPS) {
+    for (const f of step.fields) {
+      if (shouldShowField(f, answers)) total++;
+    }
+  }
+  return total;
+}
+
 export function calculateProgress(answers) {
-  const filled = Object.values(answers || {}).filter(v => {
-    if (v == null || v === '') return false;
-    if (Array.isArray(v) && v.length === 0) return false;
-    return true;
-  }).length;
-  return Math.min(99, Math.round((filled / TOTAL_FIELDS) * 100));
+  const visible = countVisibleFields(answers);
+  if (visible === 0) return 0;
+  let filled = 0;
+  for (const step of BRIEFING_STEPS) {
+    for (const f of step.fields) {
+      if (!shouldShowField(f, answers)) continue;
+      const v = answers?.[f.id];
+      if (v == null || v === '') continue;
+      if (Array.isArray(v) && v.length === 0) continue;
+      filled++;
+    }
+  }
+  return Math.min(99, Math.round((filled / visible) * 100));
 }
 
 export function findStepByFieldId(fieldId) {

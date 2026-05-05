@@ -120,11 +120,31 @@
 
     function renderAnswer(field, value) {
       const isEmpty = value == null || value === '' || (Array.isArray(value) && value.length === 0);
-      const display = isEmpty
-        ? '<span class="answer-empty">— não respondido</span>'
-        : Array.isArray(value)
-          ? value.map(v => `<span class="badge" style="margin:2px 4px 2px 0;background:var(--surface-2);color:var(--text);">${escapeHtml(v)}</span>`).join('')
-          : `<div class="answer-value">${escapeHtml(value)}</div>`;
+
+      let display;
+      if (isEmpty) {
+        display = '<span class="answer-empty">— não respondido</span>';
+      } else if (field.type === 'file' && Array.isArray(value)) {
+        display = `<div style="display:flex;flex-direction:column;gap:6px;">
+          ${value.map(f => `
+            <a href="${escapeHtml(f.url)}" target="_blank" rel="noopener"
+               style="display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--surface-2);border:1px solid var(--border);border-radius:8px;text-decoration:none;color:var(--text);">
+              <span style="font-size:18px;">📄</span>
+              <div style="flex:1;min-width:0;">
+                <div style="font-weight:500;color:var(--docads-cyan-2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${escapeHtml(f.name)}</div>
+                <div style="font-size:12px;color:var(--text-muted);">${formatBytes(f.size)}</div>
+              </div>
+              <span style="color:var(--text-muted);font-size:13px;">↓ baixar</span>
+            </a>
+          `).join('')}
+        </div>`;
+      } else if (Array.isArray(value)) {
+        display = value.map(v => `<span class="badge" style="margin:2px 4px 2px 0;background:var(--surface-2);color:var(--text);">${escapeHtml(v)}</span>`).join('');
+      } else if (field.type === 'url' && typeof value === 'string' && value.startsWith('http')) {
+        display = `<div class="answer-value"><a href="${escapeHtml(value)}" target="_blank" rel="noopener">${escapeHtml(value)}</a></div>`;
+      } else {
+        display = `<div class="answer-value">${escapeHtml(value)}</div>`;
+      }
 
       return `
         <div class="answer-block">
@@ -132,6 +152,14 @@
           ${display}
         </div>
       `;
+    }
+
+    function formatBytes(bytes) {
+      if (!bytes && bytes !== 0) return '';
+      const units = ['B', 'KB', 'MB', 'GB'];
+      let i = 0; let val = bytes;
+      while (val >= 1024 && i < units.length - 1) { val /= 1024; i++; }
+      return `${val.toFixed(val < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
     }
 
     await load();

@@ -5,9 +5,10 @@
 import {
   getBriefingBySlug,
   saveBriefingDraft,
-  submitBriefing
+  submitBriefing,
+  uploadBriefingFile
 } from './supabase.js';
-import { BRIEFING_STEPS, calculateProgress } from './briefing-schema.js';
+import { BRIEFING_STEPS, calculateProgress, shouldShowField } from './briefing-schema.js';
 import { $, debounce, escapeHtml, getQueryParam, toast } from './utils.js';
 import { applyMask, maskValue } from './masks.js';
 
@@ -108,7 +109,7 @@ function render() {
           <p class="step-desc">${escapeHtml(step.desc)}</p>
 
           <div class="step-body">
-            ${step.fields.map(f => renderField(f, state.answers[f.id])).join('')}
+            ${step.fields.filter(f => shouldShowField(f, state.answers)).map(f => renderField(f, state.answers[f.id])).join('')}
           </div>
 
           <div class="step-actions">
@@ -167,6 +168,43 @@ function renderField(f, value) {
             </label>
           `).join('')}
         </div>
+      </div>
+    `;
+  }
+
+  if (f.type === 'file') {
+    const files = Array.isArray(value) ? value : [];
+    const max = f.maxFiles || 10;
+    const remaining = Math.max(0, max - files.length);
+    return `
+      <div class="field" data-field="${f.id}">
+        <label class="${labelClass}">${escapeHtml(f.label)}</label>
+        ${hint}
+        <div class="file-list" id="file-list-${f.id}">
+          ${files.map((file, i) => `
+            <div class="file-item">
+              <div class="file-info">
+                <div class="file-icon">📄</div>
+                <div>
+                  <a href="${escapeHtml(file.url)}" target="_blank" class="file-name">${escapeHtml(file.name)}</a>
+                  <div class="file-meta">${formatBytes(file.size)}</div>
+                </div>
+              </div>
+              <button type="button" class="btn-remove-file" data-field-id="${f.id}" data-index="${i}" aria-label="Remover">×</button>
+            </div>
+          `).join('')}
+        </div>
+        ${remaining > 0 ? `
+          <label class="file-add">
+            <input type="file" data-id="${f.id}" data-max="${max}"
+              ${f.multiple ? 'multiple' : ''}
+              ${f.accept ? `accept="${escapeHtml(f.accept)}"` : ''}
+              style="display:none;">
+            <span>+ Adicionar arquivo${f.multiple ? 's' : ''}</span>
+            <span class="file-add-hint">${remaining} de ${max} restantes</span>
+          </label>
+        ` : '<div class="text-sm text-muted" style="margin-top:8px;">Limite atingido. Remova um arquivo para enviar outro.</div>'}
+        <div class="file-progress" id="file-progress-${f.id}" style="display:none;"></div>
       </div>
     `;
   }
@@ -241,6 +279,76 @@ function attachListeners(step) {
       }
       state.answers[id] = arr;
       autoSave();
+      // Re-render se algum campo depende desse valor (showIf)
+      if (anyFieldDependsOn(id)) render();
+    });
+  });
+
+  // radio — re-render se afeta condição
+  const reRenderOnRadio = root.querySelectorAll('input[type=radio]');
+  reRenderOnRadio.forEach(el => {
+    const original = el.onchange;
+    el.addEventListener('change', () => {
+      if (anyFieldDependsOn(el.dataset.id)) {
+        // Limpa respostas dos campos que vão sumir
+        clearOrphanAnswers();
+        render();
+      }
+    });
+  });
+
+  // file upload
+  root.querySelectorAll('input[type=file]').forEach(el => {
+    el.addEventListener('change', async (e) => {
+      const fieldId = el.dataset.id;
+      const max = parseInt(el.dataset.max || '10', 10);
+      const current = Array.isArray(state.answers[fieldId]) ? state.answers[fieldId] : [];
+      const files = [...e.target.files];
+      const slots = max - current.length;
+      if (files.length > slots) {
+        toast(`Você só pode enviar mais ${slots} arquivo(s).`, 'warning');
+        files.splice(slots);
+      }
+
+      const progressEl = $(`#file-progress-${fieldId}`);
+      const newFiles = [...current];
+
+      for (let i = 0; i < files.length; i++) {
+        const file = files[i];
+        if (file.size > 10 * 1024 * 1024) {
+          toast(`"${file.name}" excede 10MB e foi pulado.`, 'error');
+          continue;
+        }
+        if (progressEl) {
+          progressEl.style.display = 'block';
+          progressEl.textContent = `Enviando ${i + 1} de ${files.length}: ${file.name}...`;
+        }
+        try {
+          const uploaded = await uploadBriefingFile(slug, file);
+          newFiles.push(uploaded);
+        } catch (err) {
+          console.error(err);
+          toast(`Erro ao enviar "${file.name}": ${err.message || 'falha de rede'}`, 'error');
+        }
+      }
+
+      if (progressEl) progressEl.style.display = 'none';
+      state.answers[fieldId] = newFiles;
+      saveImmediately();
+      render();
+    });
+  });
+
+  // remove file
+  root.querySelectorAll('.btn-remove-file').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const fieldId = btn.dataset.fieldId;
+      const idx = parseInt(btn.dataset.index, 10);
+      const arr = Array.isArray(state.answers[fieldId]) ? [...state.answers[fieldId]] : [];
+      arr.splice(idx, 1);
+      state.answers[fieldId] = arr;
+      saveImmediately();
+      render();
     });
   });
 
@@ -281,9 +389,39 @@ function attachListeners(step) {
   });
 }
 
+function anyFieldDependsOn(fieldId) {
+  for (const step of BRIEFING_STEPS) {
+    for (const f of step.fields) {
+      if (f.showIf?.field === fieldId) return true;
+    }
+  }
+  return false;
+}
+
+function clearOrphanAnswers() {
+  // Remove respostas de campos que estão atualmente escondidos
+  for (const step of BRIEFING_STEPS) {
+    for (const f of step.fields) {
+      if (f.showIf && !shouldShowField(f, state.answers)) {
+        delete state.answers[f.id];
+      }
+    }
+  }
+}
+
+function formatBytes(bytes) {
+  if (!bytes && bytes !== 0) return '';
+  const units = ['B', 'KB', 'MB', 'GB'];
+  let i = 0;
+  let val = bytes;
+  while (val >= 1024 && i < units.length - 1) { val /= 1024; i++; }
+  return `${val.toFixed(val < 10 && i > 0 ? 1 : 0)} ${units[i]}`;
+}
+
 function validateStep(step) {
   let firstError = null;
   for (const f of step.fields) {
+    if (!shouldShowField(f, state.answers)) continue; // pula campos escondidos
     const v = state.answers[f.id];
     const isEmpty = v == null || v === '' || (Array.isArray(v) && v.length === 0);
     if (f.required && isEmpty) {

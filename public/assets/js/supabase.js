@@ -92,3 +92,39 @@ export async function generateBriefingSlug(companyName) {
   if (error) throw error;
   return data;
 }
+
+// ---------------------------------------------------------------------
+// Storage (briefing-files bucket)
+// ---------------------------------------------------------------------
+const STORAGE_BUCKET = 'briefing-files';
+
+export async function uploadBriefingFile(slug, file) {
+  // Sanitiza o nome
+  const safeName = file.name
+    .normalize('NFD')
+    .replace(/[̀-ͯ]/g, '')
+    .replace(/[^a-zA-Z0-9._-]/g, '_');
+  const path = `${slug}/${Date.now()}-${safeName}`;
+
+  const { data, error } = await supabase.storage
+    .from(STORAGE_BUCKET)
+    .upload(path, file, {
+      cacheControl: '3600',
+      upsert: false,
+      contentType: file.type || 'application/octet-stream'
+    });
+
+  if (error) throw error;
+
+  const { data: pub } = supabase.storage
+    .from(STORAGE_BUCKET)
+    .getPublicUrl(data.path);
+
+  return {
+    name: file.name,
+    size: file.size,
+    type: file.type,
+    path: data.path,
+    url: pub.publicUrl
+  };
+}
