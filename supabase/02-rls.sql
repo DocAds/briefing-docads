@@ -13,7 +13,9 @@ alter table public.briefings enable row level security;
 alter table public.activity_log enable row level security;
 
 -- =====================================================================
--- Helper: verificar se user é admin ativo
+-- Helpers: SEMPRE security definer pra evitar recursão de RLS
+-- (policies que fazem subquery em public.admins SEM security definer
+-- causam recursão infinita → 500 Internal Server Error)
 -- =====================================================================
 create or replace function public.is_admin()
 returns boolean
@@ -25,6 +27,19 @@ as $$
   select exists (
     select 1 from public.admins
     where id = auth.uid() and is_active = true
+  );
+$$;
+
+create or replace function public.is_owner()
+returns boolean
+language sql
+stable
+security definer
+set search_path = public
+as $$
+  select exists (
+    select 1 from public.admins
+    where id = auth.uid() and role = 'owner' and is_active = true
   );
 $$;
 
@@ -41,18 +56,8 @@ drop policy if exists "admins_owner_all" on public.admins;
 create policy "admins_owner_all"
   on public.admins for all
   to authenticated
-  using (
-    exists (
-      select 1 from public.admins
-      where id = auth.uid() and role = 'owner' and is_active = true
-    )
-  )
-  with check (
-    exists (
-      select 1 from public.admins
-      where id = auth.uid() and role = 'owner' and is_active = true
-    )
-  );
+  using (public.is_owner())
+  with check (public.is_owner());
 
 -- =====================================================================
 -- Policies: clients
