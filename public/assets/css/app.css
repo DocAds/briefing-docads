@@ -762,7 +762,10 @@ p { margin: 0 0 1em 0; color: var(--text); }
   max-width: 420px;
   box-shadow: var(--shadow-lg);
 }
-.login-logo { height: 32px; margin-bottom: 32px; }
+.login-card { text-align: center; }
+.login-card .field { text-align: left; }
+.login-card h2 { text-align: center; }
+.login-logo { height: 36px; margin: 0 auto 32px auto; display: block; }
 
 /* ===================================================================
    Mobile
