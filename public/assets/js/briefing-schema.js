@@ -301,8 +301,6 @@ export const BRIEFING_STEPS = [
         options: ['Semanal', 'Quinzenal', 'Mensal', 'Sob demanda', 'Sem reuniões — só relatórios'] },
       { id: 'canal_comunicacao', type: 'checkbox', label: 'Canais de comunicação preferidos',
         options: ['WhatsApp', 'E-mail', 'Slack', 'Telegram', 'Reunião presencial', 'Reunião online'] },
-      { id: 'expectativa_relatorio', type: 'select', label: 'Frequência de relatórios',
-        options: ['Diária', 'Semanal', 'Quinzenal', 'Mensal', 'Quando solicitado'] },
       { id: 'comeca_quando', type: 'select', label: 'Quando precisa começar?',
         options: ['Imediato', 'Esta semana', 'Próximas 2 semanas', 'Próximo mês', 'Sem pressa'] },
       { id: 'observacoes_extras', type: 'textarea', label: 'Algo mais que precisamos saber?',
