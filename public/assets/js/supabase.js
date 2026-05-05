@@ -55,7 +55,8 @@ export async function logout() {
 export async function getBriefingBySlug(slug) {
   const { data, error } = await supabase.rpc('get_briefing_by_slug', { p_slug: slug });
   if (error) throw error;
-  if (data?.error) throw new Error(data.error);
+  // Não lança exceção em erros de aplicação ({error:'link_invalid'/'link_expired'})
+  // — deixa o caller tratar e mostrar mensagem amigável
   return data;
 }
 
