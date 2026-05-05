@@ -61,6 +61,15 @@ async function boot() {
       state.currentStep = Math.min(data.briefing.current_step || 0, BRIEFING_STEPS.length - 1);
     }
 
+    // Override de etapa via URL (?step=N) — útil pra testes/admin
+    const stepParam = getQueryParam('step');
+    if (stepParam != null && stepParam !== '') {
+      const n = parseInt(stepParam, 10);
+      if (!isNaN(n)) {
+        state.currentStep = Math.max(0, Math.min(n, BRIEFING_STEPS.length - 1));
+      }
+    }
+
     render();
   } catch (e) {
     console.error(e);
