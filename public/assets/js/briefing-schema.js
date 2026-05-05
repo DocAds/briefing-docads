@@ -145,7 +145,8 @@ export const BRIEFING_STEPS = [
     title: 'Objetivos & metas',
     desc: 'Onde queremos chegar com a estratégia.',
     fields: [
-      { id: 'objetivo_principal', type: 'radio', label: 'Qual o objetivo principal da campanha?',
+      { id: 'objetivo_principal', type: 'checkbox', label: 'Qual o objetivo principal da campanha?',
+        hint: 'Pode marcar mais de uma opção',
         options: [
           'Gerar leads (contatos qualificados)',
           'Vender direto pelo site / e-commerce',
