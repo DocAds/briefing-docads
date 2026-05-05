@@ -9,6 +9,7 @@ import {
 } from './supabase.js';
 import { BRIEFING_STEPS, calculateProgress } from './briefing-schema.js';
 import { $, debounce, escapeHtml, getQueryParam, toast } from './utils.js';
+import { applyMask, maskValue } from './masks.js';
 
 const slug = getQueryParam('c') || getQueryParam('slug');
 const state = {
@@ -190,13 +191,15 @@ function renderField(f, value) {
 
   // text/email/tel/url/number
   const inputType = f.type === 'number' ? 'number' : f.type;
+  const displayValue = f.mask ? maskValue(value, f.mask) : (value || '');
+  const maskAttr = f.mask ? ` data-mask="${escapeHtml(f.mask)}" inputmode="${f.mask === 'currency' || f.mask === 'percent' || f.mask === 'cnpj' || f.mask === 'phone' ? 'numeric' : 'text'}"` : '';
   return `
     <div class="field" data-field="${f.id}">
       <label class="${labelClass}" for="${id}">${escapeHtml(f.label)}</label>
       ${hint}
       <input class="input" type="${inputType}" id="${id}" data-id="${f.id}"
-        value="${escapeHtml(value || '')}"
-        placeholder="${escapeHtml(f.placeholder || '')}">
+        value="${escapeHtml(displayValue)}"
+        placeholder="${escapeHtml(f.placeholder || '')}"${maskAttr}>
     </div>
   `;
 }
@@ -207,9 +210,11 @@ function renderField(f, value) {
 function attachListeners(step) {
   const root = $('#briefing-root');
 
-  // inputs (text/textarea/select)
+  // inputs (text/textarea/select) — aplica máscara se houver
   root.querySelectorAll('input[type=text], input[type=email], input[type=tel], input[type=url], input[type=number], textarea, select').forEach(el => {
     el.addEventListener('input', () => {
+      const mask = el.dataset.mask;
+      if (mask) applyMask(el, mask);
       state.answers[el.dataset.id] = el.value;
       autoSave();
     });

@@ -57,7 +57,7 @@
           </div>
           <div class="field">
             <label class="field-label">CNPJ</label>
-            <input class="input" name="cnpj">
+            <input class="input" name="cnpj" data-mask="cnpj" inputmode="numeric" placeholder="00.000.000/0000-00">
           </div>
         </div>
         <div class="row">
@@ -67,7 +67,7 @@
           </div>
           <div class="field">
             <label class="field-label">Telefone</label>
-            <input class="input" type="tel" name="contact_phone">
+            <input class="input" type="tel" name="contact_phone" data-mask="phone" inputmode="numeric" placeholder="(00) 00000-0000">
           </div>
         </div>
         <div class="field">
@@ -107,8 +107,14 @@
     import { mountAdminShell } from '/assets/js/admin-shell.js';
     import { supabase, generateBriefingSlug } from '/assets/js/supabase.js';
     import { $, escapeHtml, formatDate, statusBadge, toast, copyToClipboard, debounce } from '/assets/js/utils.js';
+    import { applyMask } from '/assets/js/masks.js';
 
     await mountAdminShell('clientes');
+
+    // Aplica máscaras em inputs com data-mask
+    document.querySelectorAll('input[data-mask]').forEach(el => {
+      el.addEventListener('input', () => applyMask(el, el.dataset.mask));
+    });
 
     const cfg = window.DOCADS_CONFIG;
     const PUBLIC_URL = cfg.PUBLIC_URL || window.location.origin;

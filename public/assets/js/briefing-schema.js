@@ -3,6 +3,7 @@
 // =====================================================================
 // Cada bloco vira um "step" do formulário multi-step.
 // type: text | textarea | radio | checkbox | select | number | tel | email | url
+// mask: cnpj | cpfcnpj | phone | currency | percent (opcional)
 // =====================================================================
 
 export const BRIEFING_STEPS = [
@@ -14,7 +15,7 @@ export const BRIEFING_STEPS = [
     fields: [
       { id: 'razao_social', type: 'text', label: 'Razão social', required: true },
       { id: 'nome_fantasia', type: 'text', label: 'Nome fantasia (como o cliente conhece)', required: true },
-      { id: 'cnpj', type: 'text', label: 'CNPJ', placeholder: '00.000.000/0000-00' },
+      { id: 'cnpj', type: 'text', label: 'CNPJ', placeholder: '00.000.000/0000-00', mask: 'cnpj' },
       { id: 'site', type: 'url', label: 'Site oficial', placeholder: 'https://' },
       { id: 'instagram', type: 'text', label: 'Instagram', placeholder: '@perfil' },
       { id: 'tempo_mercado', type: 'select', label: 'Há quanto tempo no mercado?', options: [
@@ -44,9 +45,9 @@ export const BRIEFING_STEPS = [
     fields: [
       { id: 'oferta_principal', type: 'textarea', label: 'Qual a oferta principal que vai ser anunciada?',
         hint: 'Descreva em detalhes: o que é, para quem, qual o resultado prometido.', required: true },
-      { id: 'preco', type: 'text', label: 'Preço da oferta principal', placeholder: 'Ex: R$ 1.500 ou "varia"' },
+      { id: 'preco', type: 'text', label: 'Preço da oferta principal', placeholder: 'R$ 0,00', mask: 'currency' },
       { id: 'ticket_medio', type: 'text', label: 'Ticket médio de venda',
-        hint: 'Quanto vale uma venda fechada em média', required: true },
+        hint: 'Quanto vale uma venda fechada em média', placeholder: 'R$ 0,00', mask: 'currency', required: true },
       { id: 'margem_lucro', type: 'select', label: 'Margem de lucro estimada na oferta',
         hint: 'Define até quanto faz sentido pagar por venda',
         options: [
@@ -126,7 +127,7 @@ export const BRIEFING_STEPS = [
         options: ['Meta Ads (Facebook/Instagram)', 'Google Ads', 'TikTok Ads', 'YouTube Ads',
                  'LinkedIn Ads', 'Pinterest Ads', 'Kwai Ads', 'Nenhuma'] },
       { id: 'investimento_anterior', type: 'text', label: 'Quanto investiu em média por mês?',
-        placeholder: 'Ex: R$ 3.000/mês' },
+        placeholder: 'R$ 0,00', mask: 'currency' },
       { id: 'resultado_anterior', type: 'textarea', label: 'Quais resultados obteve?',
         hint: 'Leads/mês, vendas, ROAS, CPL — o que tiver de número' },
       { id: 'agencia_anterior', type: 'radio', label: 'Já trabalhou com agência ou gestor de tráfego?',
@@ -156,7 +157,7 @@ export const BRIEFING_STEPS = [
       { id: 'meta_numerica', type: 'text', label: 'Meta numérica em 90 dias',
         hint: 'Ex: 200 leads/mês, 30 vendas/mês, R$ 100k em receita', required: true },
       { id: 'cpl_aceitavel', type: 'text', label: 'CPA / CPL aceitável (custo por lead/venda)',
-        hint: 'Quanto pode pagar para gerar 1 lead/venda' },
+        hint: 'Quanto pode pagar para gerar 1 lead/venda', placeholder: 'R$ 0,00', mask: 'currency' },
       { id: 'roas_esperado', type: 'text', label: 'ROAS esperado (se vende direto)',
         hint: 'Ex: 3x significa que para cada R$1 investido, R$3 de venda' },
       { id: 'orcamento_mensal', type: 'select', label: 'Orçamento mensal disponível para mídia paga',
@@ -186,7 +187,7 @@ export const BRIEFING_STEPS = [
         options: ['Mesmo dia', '1 a 3 dias', '1 semana', '2 a 4 semanas',
                  '1 a 3 meses', 'Mais de 3 meses'] },
       { id: 'taxa_conversao', type: 'text', label: 'Taxa de conversão de lead em venda',
-        hint: 'A cada 100 leads, quantos viram cliente?' },
+        hint: 'A cada 100 leads, quantos viram cliente?', placeholder: '0%', mask: 'percent' },
       { id: 'gargalo_atual', type: 'textarea', label: 'Onde está o maior gargalo hoje?',
         hint: 'Falta lead? Lead ruim? Conversão baixa? Demora? Atendimento?' },
       { id: 'canal_atendimento', type: 'checkbox', label: 'Como atende leads recebidos?',
@@ -272,7 +273,7 @@ export const BRIEFING_STEPS = [
       { id: 'tem_landing_page', type: 'radio', label: 'Tem landing page específica para campanhas?',
         options: ['Sim, várias', 'Sim, uma genérica', 'Não, usamos a home', 'Precisa criar'] },
       { id: 'tem_whatsapp', type: 'tel', label: 'Número de WhatsApp para receber leads',
-        placeholder: '+55 19 99999-9999' },
+        placeholder: '(00) 00000-0000', mask: 'phone' },
       { id: 'whatsapp_business', type: 'radio', label: 'É WhatsApp Business?',
         options: ['Sim, com API oficial', 'Sim, app comum', 'Não, é WhatsApp pessoal'] }
     ]
