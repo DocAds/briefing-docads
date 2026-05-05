@@ -21,10 +21,13 @@ RewriteRule ^b/([a-z0-9-]+)/?$ /briefing.html?c=$1 [L,QSA]
 </IfModule>
 
 # Cache de estáticos
+# Durante fase de iteração rápida, JS/CSS com cache curto (5 min)
+# Imagens e fontes mantêm cache longo (mudam pouco)
 <IfModule mod_expires.c>
   ExpiresActive On
-  ExpiresByType text/css "access plus 7 days"
-  ExpiresByType application/javascript "access plus 7 days"
+  ExpiresByType text/css "access plus 5 minutes"
+  ExpiresByType application/javascript "access plus 5 minutes"
+  ExpiresByType text/html "access plus 5 minutes"
   ExpiresByType image/png "access plus 30 days"
   ExpiresByType image/jpeg "access plus 30 days"
   ExpiresByType image/svg+xml "access plus 30 days"
