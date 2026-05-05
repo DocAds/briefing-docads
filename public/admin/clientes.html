@@ -7,6 +7,7 @@
   <title>Clientes — Briefing DocAds</title>
   <link rel="icon" type="image/png" href="/assets/img/favicon.png">
   <link rel="stylesheet" href="/assets/css/app.css">
+  <script src="https://code.iconify.design/iconify-icon/3.0.0/iconify-icon.min.js"></script>
 </head>
 <body>
   <div class="admin-shell">
@@ -183,14 +184,16 @@
                     ${briefing ? `${briefing.progress}% ${briefing.submitted_at ? '✓' : ''}` : (activeLink ? '🔗 Link ativo' : '—')}
                   </td>
                   <td class="text-sm text-muted">${formatDate(c.created_at)}</td>
-                  <td onclick="event.stopPropagation()" style="white-space:nowrap;">
+                  <td onclick="event.stopPropagation()" style="white-space:nowrap;text-align:right;">
                     ${activeLink
-                      ? `<button class="btn btn-ghost btn-sm" onclick="window.showLink('${activeLink.slug}')">📋 Link</button>`
+                      ? `<button class="btn btn-ghost btn-sm" onclick="window.showLink('${activeLink.slug}')"><iconify-icon icon="lucide:link" width="14" style="vertical-align:-2px;margin-right:4px;"></iconify-icon>Link</button>`
                       : !briefing?.submitted_at
-                        ? `<button class="btn btn-ghost btn-sm" onclick="window.genLink('${c.id}','${escapeHtml(c.company_name).replace(/'/g, "\\'")}')">+ Gerar link</button>`
+                        ? `<button class="btn btn-ghost btn-sm" onclick="window.genLink('${c.id}','${escapeHtml(c.company_name).replace(/'/g, "\\'")}')"><iconify-icon icon="lucide:plus" width="14" style="vertical-align:-2px;margin-right:4px;"></iconify-icon>Gerar link</button>`
                         : ''
                     }
-                    <button class="btn btn-ghost btn-sm" onclick="window.deleteClient('${c.id}','${escapeHtml(c.company_name).replace(/'/g, "\\'")}')" style="color:var(--danger);" title="Excluir">🗑</button>
+                    <button class="btn-icon-danger" onclick="window.deleteClient('${c.id}','${escapeHtml(c.company_name).replace(/'/g, "\\'")}')" title="Excluir">
+                      <iconify-icon icon="lucide:trash-2" width="18"></iconify-icon>
+                    </button>
                   </td>
                 </tr>
               `;

@@ -7,6 +7,7 @@
   <title>Usuários — DocAds</title>
   <link rel="icon" type="image/png" href="/assets/img/favicon.png">
   <link rel="stylesheet" href="/assets/css/app.css">
+  <script src="https://code.iconify.design/iconify-icon/3.0.0/iconify-icon.min.js"></script>
 </head>
 <body>
   <div class="admin-shell">
@@ -17,17 +18,9 @@
             <h1 class="page-title">Usuários admin</h1>
             <p class="page-subtitle">Membros da equipe DocAds com acesso ao painel</p>
           </div>
-        </div>
-
-        <div class="card" style="border-left: 4px solid var(--info); margin-bottom: 24px;">
-          <p style="margin:0;font-size:14px;">
-            <strong>ℹ Como adicionar um novo usuário admin:</strong><br>
-            <span class="text-muted">1. No <a href="https://supabase.com/dashboard/project/saomjqnbiovwtpghbdkt/auth/users" target="_blank">Supabase Auth → Users</a>, crie o usuário com e-mail e senha.<br>
-            2. Depois rode no <a href="https://supabase.com/dashboard/project/saomjqnbiovwtpghbdkt/sql/new" target="_blank">SQL Editor</a>:</span>
-          </p>
-          <pre style="background:var(--surface-2);padding:12px;border-radius:8px;font-size:12px;margin-top:8px;overflow:auto;">insert into public.admins (id, full_name, role)
-select id, 'Nome Completo', 'admin'
-from auth.users where email = 'novo@docads.com.br';</pre>
+          <button class="btn btn-gradient" id="btn-new-user" style="display:none;">
+            <iconify-icon icon="lucide:user-plus" width="16" style="vertical-align:-2px;margin-right:6px;"></iconify-icon>Novo usuário
+          </button>
         </div>
 
         <div class="card" style="padding: 0;">
@@ -35,6 +28,47 @@ from auth.users where email = 'novo@docads.com.br';</pre>
         </div>
       </div>
     </main>
+  </div>
+
+  <!-- Modal: novo usuário -->
+  <div class="modal-backdrop hidden" id="modal-new">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Novo usuário admin</h3>
+        <button class="modal-close" data-close>×</button>
+      </div>
+      <p class="text-muted text-sm" style="margin-bottom: 16px;">O novo usuário recebe acesso imediato com o e-mail confirmado. Compartilhe a senha de forma segura.</p>
+      <form id="form-new" class="stack">
+        <div class="field">
+          <label class="field-label field-required">Nome completo</label>
+          <input class="input" name="full_name" required placeholder="Ex: Maria Silva">
+        </div>
+        <div class="field">
+          <label class="field-label field-required">E-mail</label>
+          <input class="input" type="email" name="email" required placeholder="usuario@docads.com.br">
+        </div>
+        <div class="field">
+          <label class="field-label field-required">Senha temporária</label>
+          <div style="position:relative;">
+            <input class="input" type="password" name="password" id="new-password" required minlength="8" style="padding-right:90px;" placeholder="Mínimo 8 caracteres">
+            <button type="button" id="btn-generate-pwd" style="position:absolute;right:6px;top:50%;transform:translateY(-50%);background:transparent;border:none;color:var(--docads-cyan-2);font-size:12px;font-weight:600;cursor:pointer;padding:4px 8px;">Gerar</button>
+          </div>
+          <div class="field-hint">Mínimo 8 caracteres. O usuário poderá trocar depois.</div>
+        </div>
+        <div class="field">
+          <label class="field-label">Papel</label>
+          <select class="select" name="role">
+            <option value="admin" selected>Admin (acesso total)</option>
+            <option value="viewer">Viewer (somente leitura — futuro)</option>
+          </select>
+        </div>
+        <div id="form-error" style="display:none;color:var(--danger);font-size:13px;padding:8px 12px;background:rgba(239,68,68,0.08);border-radius:8px;"></div>
+        <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:8px;">
+          <button type="button" class="btn btn-ghost" data-close>Cancelar</button>
+          <button type="submit" class="btn btn-primary" id="btn-submit-user">Criar usuário</button>
+        </div>
+      </form>
+    </div>
   </div>
 
   <script src="/assets/js/config.js"></script>
@@ -45,6 +79,8 @@ from auth.users where email = 'novo@docads.com.br';</pre>
 
     const profile = await mountAdminShell('usuarios');
     const isOwner = profile.role === 'owner';
+
+    if (isOwner) $('#btn-new-user').style.display = 'inline-flex';
 
     async function load() {
       const { data, error } = await supabase
@@ -57,7 +93,7 @@ from auth.users where email = 'novo@docads.com.br';</pre>
       $('#users-table').innerHTML = `
         <table class="table">
           <thead><tr>
-            <th>Nome</th><th>Papel</th><th>Status</th><th>Cadastrado</th>${isOwner ? '<th></th>' : ''}
+            <th>Nome</th><th>Papel</th><th>Status</th><th>Cadastrado</th>${isOwner ? '<th style="text-align:right;"></th>' : ''}
           </tr></thead>
           <tbody>
             ${data.map(u => `
@@ -74,8 +110,13 @@ from auth.users where email = 'novo@docads.com.br';</pre>
                 </td>
                 <td class="text-sm text-muted">${formatDate(u.created_at)}</td>
                 ${isOwner && u.id !== profile.id ? `
-                  <td>
-                    <button class="btn btn-ghost btn-sm" onclick="window.toggleUser('${u.id}', ${!u.is_active})">${u.is_active ? 'Desativar' : 'Reativar'}</button>
+                  <td style="text-align:right;white-space:nowrap;">
+                    <button class="btn btn-ghost btn-sm" onclick="window.toggleUser('${u.id}', ${!u.is_active})">
+                      ${u.is_active
+                        ? '<iconify-icon icon="lucide:user-x" width="14" style="vertical-align:-2px;margin-right:4px;"></iconify-icon>Desativar'
+                        : '<iconify-icon icon="lucide:user-check" width="14" style="vertical-align:-2px;margin-right:4px;"></iconify-icon>Reativar'
+                      }
+                    </button>
                   </td>
                 ` : isOwner ? '<td></td>' : ''}
               </tr>
@@ -91,6 +132,95 @@ from auth.users where email = 'novo@docads.com.br';</pre>
       toast('Atualizado', 'success');
       await load();
     };
+
+    // Modal handlers
+    document.querySelectorAll('[data-close]').forEach(b => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('.modal-backdrop').forEach(m => m.classList.add('hidden'));
+        $('#form-error').style.display = 'none';
+        $('#form-new').reset();
+      });
+    });
+    document.querySelectorAll('.modal-backdrop').forEach(m => {
+      m.addEventListener('click', e => {
+        if (e.target === m) {
+          m.classList.add('hidden');
+          $('#form-error').style.display = 'none';
+        }
+      });
+    });
+
+    $('#btn-new-user')?.addEventListener('click', () => {
+      $('#modal-new').classList.remove('hidden');
+    });
+
+    // Gerar senha aleatória
+    $('#btn-generate-pwd')?.addEventListener('click', () => {
+      const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789!@#$';
+      let pwd = '';
+      for (let i = 0; i < 14; i++) pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+      $('#new-password').type = 'text';
+      $('#new-password').value = pwd;
+    });
+
+    // Submit do formulário
+    $('#form-new')?.addEventListener('submit', async (e) => {
+      e.preventDefault();
+      const errEl = $('#form-error');
+      const btn = $('#btn-submit-user');
+      errEl.style.display = 'none';
+      btn.disabled = true;
+      btn.textContent = 'Criando...';
+
+      try {
+        const fd = new FormData(e.target);
+        const payload = {
+          email: fd.get('email').trim().toLowerCase(),
+          full_name: fd.get('full_name').trim(),
+          password: fd.get('password'),
+          role: fd.get('role'),
+        };
+
+        const cfg = window.DOCADS_CONFIG;
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) throw new Error('Sessão expirada. Recarregue a página.');
+
+        const resp = await fetch(`${cfg.SUPABASE_URL}/functions/v1/create-admin-user`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${session.access_token}`,
+            'apikey': cfg.SUPABASE_ANON_KEY,
+          },
+          body: JSON.stringify(payload),
+        });
+
+        const result = await resp.json();
+        if (!resp.ok) {
+          const msgs = {
+            invalid_email: 'E-mail inválido.',
+            missing_name: 'Informe o nome completo.',
+            password_too_short: 'Senha precisa ter no mínimo 8 caracteres.',
+            email_exists: 'Esse e-mail já está cadastrado.',
+            owner_required: 'Apenas owners podem criar novos usuários.',
+            not_admin: 'Você não tem permissão.',
+          };
+          throw new Error(msgs[result.error] || result.detail || result.error || 'Erro ao criar usuário.');
+        }
+
+        toast(`Usuário "${payload.full_name}" criado com sucesso`, 'success');
+        $('#modal-new').classList.add('hidden');
+        $('#form-new').reset();
+        await load();
+      } catch (err) {
+        console.error(err);
+        errEl.textContent = err.message;
+        errEl.style.display = 'block';
+      } finally {
+        btn.disabled = false;
+        btn.textContent = 'Criar usuário';
+      }
+    });
 
     await load();
   </script>
