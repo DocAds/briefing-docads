@@ -23,11 +23,15 @@ export async function mountAdminShell(activePage) {
       <span style="font-weight:700;color:var(--text-muted);font-size:14px;border-left:1px solid var(--border);padding-left:12px;margin-left:4px;">briefing</span>
     </a>
 
-    <nav class="topbar-nav">
+    <button class="topbar-burger" id="topbar-burger" aria-label="Menu" aria-expanded="false">
+      <span></span>
+    </button>
+
+    <nav class="topbar-nav" id="topbar-nav">
       ${navItems.map(n => `<a href="${n.href}" class="${n.id === activePage ? 'active' : ''}">${escapeHtml(n.label)}</a>`).join('')}
     </nav>
 
-    <div class="topbar-user">
+    <div class="topbar-user" id="topbar-user">
       <div style="text-align:right;">
         <div style="font-weight:600;color:var(--text);font-size:13px;">${escapeHtml(profile.full_name)}</div>
         <div style="font-size:12px;color:var(--text-subtle);text-transform:uppercase;letter-spacing:0.5px;">${escapeHtml(profile.role)}</div>
@@ -38,6 +42,28 @@ export async function mountAdminShell(activePage) {
   document.body.prepend(topbarEl);
 
   topbarEl.querySelector('#logout-btn').addEventListener('click', logout);
+
+  // Mobile menu toggle
+  const burger = topbarEl.querySelector('#topbar-burger');
+  const nav = topbarEl.querySelector('#topbar-nav');
+  const userBox = topbarEl.querySelector('#topbar-user');
+  burger.addEventListener('click', () => {
+    const open = !nav.classList.contains('open');
+    nav.classList.toggle('open', open);
+    userBox.classList.toggle('open', open);
+    burger.classList.toggle('open', open);
+    burger.setAttribute('aria-expanded', String(open));
+  });
+
+  // Fecha menu ao clicar num link (UX)
+  nav.querySelectorAll('a').forEach(a => {
+    a.addEventListener('click', () => {
+      nav.classList.remove('open');
+      userBox.classList.remove('open');
+      burger.classList.remove('open');
+      burger.setAttribute('aria-expanded', 'false');
+    });
+  });
 
   return profile;
 }

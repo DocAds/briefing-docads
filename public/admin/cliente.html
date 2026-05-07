@@ -162,8 +162,8 @@
           </div>
         </div>
 
-        <div class="row" style="align-items:flex-start;">
-          <div style="flex:2;min-width:0;">
+        <div class="row client-grid" style="align-items:flex-start;">
+          <div class="client-main" style="flex:2;min-width:0;">
             <div class="card">
               <div class="card-header"><h3 class="card-title">Dados do cliente</h3></div>
               <table style="width:100%;">
@@ -226,7 +226,7 @@
             </div>
           </div>
 
-          <div style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:16px;">
+          <div class="client-side" style="flex:1;min-width:280px;display:flex;flex-direction:column;gap:16px;">
             ${TYPES.map(t => renderSlot(c, t, briefings)).join('')}
           </div>
         </div>
