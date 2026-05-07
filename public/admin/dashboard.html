@@ -53,6 +53,7 @@
   <script type="module">
     import { mountAdminShell } from '/assets/js/admin-shell.js';
     import { supabase, getDashboardStats } from '/assets/js/supabase.js';
+    import { TYPE_META } from '/assets/js/briefing-registry.js';
     import { $, escapeHtml, formatDate, statusBadge } from '/assets/js/utils.js';
 
     await mountAdminShell('dashboard');
@@ -69,12 +70,22 @@
         <div class="stat-card">
           <div class="stat-label">Em andamento</div>
           <div class="stat-value">${stats.in_progress}</div>
-          <div class="stat-trend">Cliente abriu o link</div>
+          <div class="stat-trend">${(stats.active_links_trafego || 0)} tráfego · ${(stats.active_links_site || 0)} site (links ativos)</div>
         </div>
         <div class="stat-card">
-          <div class="stat-label">Concluídos</div>
-          <div class="stat-value">${stats.completed}</div>
-          <div class="stat-trend">${stats.submitted_last_7d} nos últimos 7 dias</div>
+          <div class="stat-label">🎯 Briefings de Tráfego</div>
+          <div class="stat-value">${stats.submitted_trafego_total || 0}</div>
+          <div class="stat-trend">Submetidos + analisados</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">💻 Briefings de Site</div>
+          <div class="stat-value">${stats.submitted_site_total || 0}</div>
+          <div class="stat-trend">Submetidos + analisados</div>
+        </div>
+        <div class="stat-card">
+          <div class="stat-label">Concluídos (7 dias)</div>
+          <div class="stat-value">${stats.submitted_last_7d}</div>
+          <div class="stat-trend">${stats.completed} no total</div>
         </div>
         <div class="stat-card">
           <div class="stat-label">Taxa de conclusão</div>
@@ -91,7 +102,7 @@
     try {
       const { data: briefings } = await supabase
         .from('briefings')
-        .select('id, status, submitted_at, created_at, progress, client:clients(id, company_name, contact_name)')
+        .select('id, status, briefing_type, submitted_at, created_at, progress, client:clients(id, company_name, contact_name)')
         .order('updated_at', { ascending: false })
         .limit(10);
 
@@ -101,28 +112,32 @@
         $('#recent-briefings').innerHTML = `
           <table class="table">
             <thead>
-              <tr><th>Cliente</th><th>Status</th><th>Progresso</th><th>Atualizado</th><th></th></tr>
+              <tr><th>Cliente</th><th>Tipo</th><th>Status</th><th>Progresso</th><th>Atualizado</th><th></th></tr>
             </thead>
             <tbody>
-              ${briefings.map(b => `
-                <tr onclick="location.href='/admin/briefing.html?id=${b.id}'">
-                  <td>
-                    <strong>${escapeHtml(b.client?.company_name || '—')}</strong>
-                    ${b.client?.contact_name ? `<div class="text-sm text-muted">${escapeHtml(b.client.contact_name)}</div>` : ''}
-                  </td>
-                  <td>${statusBadge(b.status)}</td>
-                  <td>
-                    <div style="display:flex;align-items:center;gap:8px;">
-                      <div style="flex:1;height:6px;background:var(--surface-2);border-radius:100px;overflow:hidden;max-width:120px;">
-                        <div style="width:${b.progress}%;height:100%;background:var(--docads-gradient);"></div>
+              ${briefings.map(b => {
+                const m = TYPE_META[b.briefing_type] || TYPE_META.trafego;
+                return `
+                  <tr onclick="location.href='/admin/briefing.html?id=${b.id}'">
+                    <td>
+                      <strong>${escapeHtml(b.client?.company_name || '—')}</strong>
+                      ${b.client?.contact_name ? `<div class="text-sm text-muted">${escapeHtml(b.client.contact_name)}</div>` : ''}
+                    </td>
+                    <td><span style="font-size:13px;font-weight:600;">${m.emoji} ${m.label}</span></td>
+                    <td>${statusBadge(b.status)}</td>
+                    <td>
+                      <div style="display:flex;align-items:center;gap:8px;">
+                        <div style="flex:1;height:6px;background:var(--surface-2);border-radius:100px;overflow:hidden;max-width:120px;">
+                          <div style="width:${b.progress}%;height:100%;background:var(--docads-gradient);"></div>
+                        </div>
+                        <span class="text-sm text-muted">${b.progress}%</span>
                       </div>
-                      <span class="text-sm text-muted">${b.progress}%</span>
-                    </div>
-                  </td>
-                  <td class="text-sm text-muted">${formatDate(b.submitted_at || b.created_at)}</td>
-                  <td><a href="/admin/briefing.html?id=${b.id}" class="btn btn-ghost btn-sm">Ver →</a></td>
-                </tr>
-              `).join('')}
+                    </td>
+                    <td class="text-sm text-muted">${formatDate(b.submitted_at || b.created_at)}</td>
+                    <td><a href="/admin/briefing.html?id=${b.id}" class="btn btn-ghost btn-sm">Ver →</a></td>
+                  </tr>
+                `;
+              }).join('')}
             </tbody>
           </table>
         `;
@@ -148,7 +163,7 @@
               <li style="padding:12px 0;border-bottom:1px solid var(--border);display:flex;justify-content:space-between;gap:16px;">
                 <div>
                   <strong>${escapeHtml(a.client?.company_name || '—')}</strong>
-                  <div class="text-sm text-muted">${escapeHtml(actionLabel(a.action))}</div>
+                  <div class="text-sm text-muted">${escapeHtml(actionLabel(a))}</div>
                 </div>
                 <div class="text-sm text-muted" style="white-space:nowrap;">${formatDate(a.created_at)}</div>
               </li>
@@ -161,12 +176,16 @@
     }
 
     function actionLabel(a) {
-      return {
+      const labels = {
         briefing_submitted: '✓ Briefing concluído',
         client_created: '+ Cliente criado',
         link_generated: '🔗 Link gerado',
         briefing_analyzed: '📊 Briefing analisado'
-      }[a] || a;
+      };
+      const base = labels[a.action] || a.action;
+      const t = a.meta?.briefing_type;
+      if (t && TYPE_META[t]) return `${base} (${TYPE_META[t].label})`;
+      return base;
     }
   </script>
 </body>

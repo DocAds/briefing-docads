@@ -16,6 +16,13 @@
     .block-card { background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 28px; margin-bottom: 20px; }
     .block-title { font-size: 20px; margin-bottom: 4px; color: var(--docads-navy); }
     .block-desc { color: var(--text-muted); font-size: 14px; margin-bottom: 20px; }
+    .type-pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 4px 10px; border-radius: 100px; font-size: 12px; font-weight: 600;
+      border: 1px solid var(--border);
+    }
+    .type-pill.trafego { color: #0B6BCB; border-color: #B8DCF7; background: #EAF5FE; }
+    .type-pill.site    { color: #6B3FA0; border-color: #DDD0EE; background: #F4ECFC; }
     @media print {
       .topbar, .actions-bar, .no-print { display: none !important; }
       body { background: white; }
@@ -41,7 +48,7 @@
   <script type="module">
     import { mountAdminShell } from '/assets/js/admin-shell.js';
     import { supabase } from '/assets/js/supabase.js';
-    import { BRIEFING_STEPS, getFieldDef } from '/assets/js/briefing-schema.js';
+    import { getSchema, TYPE_META } from '/assets/js/briefing-registry.js';
     import { $, escapeHtml, formatDate, statusBadge, toast, getQueryParam } from '/assets/js/utils.js';
 
     await mountAdminShell('briefings');
@@ -57,19 +64,32 @@
         .single();
 
       if (error || !b) { toast('Briefing não encontrado', 'error'); return; }
-
       render(b);
     }
 
     function render(b) {
       const c = b.client;
       const answers = b.answers || {};
+      const briefingType = b.briefing_type || 'trafego';
+      const meta = TYPE_META[briefingType] || TYPE_META.trafego;
+
+      let steps;
+      try {
+        steps = getSchema(briefingType);
+      } catch (e) {
+        toast('Tipo de briefing desconhecido: ' + briefingType, 'error');
+        return;
+      }
 
       $('#briefing-detail').innerHTML = `
         <div class="page-header no-print">
           <div>
             <h1 class="page-title" style="font-size:24px;">${escapeHtml(c.company_name)}</h1>
-            <p class="page-subtitle">${statusBadge(b.status)} · ${b.progress}% · ${b.submitted_at ? 'Submetido ' + formatDate(b.submitted_at) : 'Última edição ' + formatDate(b.updated_at)}</p>
+            <p class="page-subtitle">
+              <span class="type-pill ${briefingType}">${meta.emoji} ${meta.label}</span> ·
+              ${statusBadge(b.status)} · ${b.progress}% ·
+              ${b.submitted_at ? 'Submetido ' + formatDate(b.submitted_at) : 'Última edição ' + formatDate(b.updated_at)}
+            </p>
           </div>
           <div style="display:flex;gap:8px;">
             <button class="btn btn-outline" onclick="window.print()">🖨️ Imprimir / PDF</button>
@@ -78,10 +98,9 @@
           </div>
         </div>
 
-        <!-- Cabeçalho do briefing pra impressão -->
         <div style="text-align:center;margin-bottom:32px;padding-bottom:24px;border-bottom:2px solid var(--docads-navy);">
           <img src="/assets/img/logo.png" alt="DocAds" style="height:32px;margin-bottom:16px;">
-          <h2 style="font-size:24px;color:var(--docads-navy);">Briefing — ${escapeHtml(c.company_name)}</h2>
+          <h2 style="font-size:24px;color:var(--docads-navy);">${meta.emoji} Briefing de ${meta.label} — ${escapeHtml(c.company_name)}</h2>
           <p class="text-muted text-sm" style="margin-top:8px;">
             ${c.contact_name ? escapeHtml(c.contact_name) + ' · ' : ''}
             ${c.contact_email ? escapeHtml(c.contact_email) + ' · ' : ''}
@@ -89,7 +108,7 @@
           </p>
         </div>
 
-        ${BRIEFING_STEPS.map((step, idx) => `
+        ${steps.map((step, idx) => `
           <div class="block-card">
             <h3 class="block-title">${idx + 1}. ${escapeHtml(step.title)}</h3>
             <p class="block-desc">${escapeHtml(step.desc)}</p>
@@ -111,7 +130,8 @@
           .update({ status: 'analyzed' })
           .eq('id', c.id);
         await supabase.from('activity_log').insert({
-          client_id: c.id, briefing_id: b.id, action: 'briefing_analyzed'
+          client_id: c.id, briefing_id: b.id, action: 'briefing_analyzed',
+          meta: { briefing_type: briefingType }
         });
         toast('Marcado como analisado', 'success');
         await load();

@@ -26,8 +26,19 @@ Vá para [SQL Editor → New query](https://supabase.com/dashboard/project/saomj
 2. `supabase/02-rls.sql` — Row Level Security
 3. `supabase/03-functions.sql` — RPCs `get_briefing_by_slug`, `save_briefing_draft`, `submit_briefing`, etc.
 4. `supabase/04-seed.sql` — vincula `adm@docads.com.br` à tabela `admins` como `owner`
+5. `supabase/05-storage.sql` — bucket de uploads (brandbook, logos)
+6. `supabase/06-multi-briefing.sql` — ⭐ adiciona suporte a multi-tipo (Tráfego + Site)
 
 > Se algo falhar no `04-seed.sql`, você não criou o usuário no passo 1.1.
+> O `06-multi-briefing.sql` é **idempotente** — pode rodar várias vezes sem efeitos colaterais.
+
+#### Atualização de uma instância já existente
+
+Se o sistema já está rodando com o briefing único de tráfego e você só quer ativar o multi-tipo:
+
+1. Rode **apenas** `supabase/06-multi-briefing.sql` no SQL Editor
+2. Suba o conteúdo atualizado de `public/` no cPanel substituindo arquivos
+3. Pronto — todos os briefings antigos são automaticamente marcados como `briefing_type='trafego'`
 
 ### 1.3. Deploy da Edge Function (notificação por email)
 
@@ -199,9 +210,16 @@ Supabase faz backup automático no plano free. Para baixar:
 supabase db dump --data-only > backup.sql
 ```
 
-### Editar perguntas do briefing
+### Editar perguntas dos briefings
 
-Edite `public/assets/js/briefing-schema.js` — cada bloco vira uma etapa.
+- **Tráfego** (11 blocos): edite `public/assets/js/briefing-schema.js`
+- **Site** (12 blocos): edite `public/assets/js/briefing-site-schema.js`
+
+Cada bloco vira uma etapa do formulário. Para adicionar um terceiro tipo no futuro, basta:
+1. Criar `briefing-<tipo>-schema.js` exportando o array de steps
+2. Registrar no `briefing-registry.js` (constantes `VALID_TYPES`, `TYPE_META` e objeto `SCHEMAS`)
+3. Adicionar `'<tipo>'` no CHECK constraint do banco e no `generate_briefing_slug` (atualizar via novo SQL idempotente)
+
 **ATENÇÃO:** se mudar `id` de campos, briefings antigos vão ficar com chaves órfãs no JSONB. Prefira adicionar novos campos do que renomear.
 
 ---

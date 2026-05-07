@@ -86,11 +86,28 @@ export async function getDashboardStats() {
   return data;
 }
 
-export async function generateBriefingSlug(companyName) {
+export async function generateBriefingSlug(companyName, briefingType = 'trafego') {
   const { data, error } = await supabase.rpc('generate_briefing_slug', {
-    p_company_name: companyName
+    p_company_name: companyName,
+    p_briefing_type: briefingType
   });
   if (error) throw error;
+  return data;
+}
+
+export async function createBriefingLink(clientId, briefingType, companyName) {
+  const slug = await generateBriefingSlug(companyName, briefingType);
+  const { data, error } = await supabase
+    .from('briefing_links')
+    .insert({ client_id: clientId, slug, is_active: true, briefing_type: briefingType })
+    .select()
+    .single();
+  if (error) throw error;
+  await supabase.from('activity_log').insert({
+    client_id: clientId,
+    action: 'link_generated',
+    meta: { slug, briefing_type: briefingType }
+  });
   return data;
 }
 

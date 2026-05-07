@@ -1,5 +1,5 @@
 // =====================================================================
-// Briefing — Lógica do formulário multi-step
+// Briefing — Lógica do formulário multi-step (multi-tipo: trafego/site)
 // =====================================================================
 
 import {
@@ -8,7 +8,13 @@ import {
   submitBriefing,
   uploadBriefingFile
 } from './supabase.js';
-import { BRIEFING_STEPS, calculateProgress, shouldShowField } from './briefing-schema.js';
+import {
+  getSchema,
+  getTypeMeta,
+  calculateProgress,
+  shouldShowField,
+  anyFieldDependsOn
+} from './briefing-registry.js';
 import { $, debounce, escapeHtml, getQueryParam, toast } from './utils.js';
 import { applyMask, maskValue } from './masks.js';
 
@@ -17,8 +23,12 @@ function extractSlugFromPath() {
   return m ? m[1] : null;
 }
 const slug = getQueryParam('c') || getQueryParam('slug') || extractSlugFromPath();
+
 const state = {
   slug,
+  briefingType: 'trafego',
+  steps: null,
+  meta: null,
   clientName: '',
   contactName: '',
   contactEmail: '',
@@ -46,12 +56,20 @@ async function boot() {
       return;
     }
 
+    state.briefingType = data.briefing_type || 'trafego';
+    try {
+      state.steps = getSchema(state.briefingType);
+    } catch (e) {
+      showError('Tipo de briefing não suportado. Contate a DocAds.');
+      return;
+    }
+    state.meta = getTypeMeta(state.briefingType);
+
     state.clientName = data.client.company_name;
     state.contactName = data.client.contact_name || '';
     state.contactEmail = data.client.contact_email || '';
     state.contactPhone = data.client.contact_phone || '';
 
-    // Pré-preenche
     if (state.contactName) state.answers.contato_nome = state.contactName;
     if (state.contactEmail) state.answers.contato_email = state.contactEmail;
     if (state.contactPhone) state.answers.contato_telefone = state.contactPhone;
@@ -62,18 +80,18 @@ async function boot() {
         return;
       }
       state.answers = { ...state.answers, ...(data.briefing.answers || {}) };
-      state.currentStep = Math.min(data.briefing.current_step || 0, BRIEFING_STEPS.length - 1);
+      state.currentStep = Math.min(data.briefing.current_step || 0, state.steps.length - 1);
     }
 
-    // Override de etapa via URL (?step=N) — útil pra testes/admin
     const stepParam = getQueryParam('step');
     if (stepParam != null && stepParam !== '') {
       const n = parseInt(stepParam, 10);
       if (!isNaN(n)) {
-        state.currentStep = Math.max(0, Math.min(n, BRIEFING_STEPS.length - 1));
+        state.currentStep = Math.max(0, Math.min(n, state.steps.length - 1));
       }
     }
 
+    document.title = `${state.meta.label} — ${state.clientName} | DocAds`;
     render();
   } catch (e) {
     console.error(e);
@@ -86,25 +104,25 @@ async function boot() {
 // ---------------------------------------------------------------------
 function render() {
   const root = $('#briefing-root');
-  const isWelcome = state.currentStep === -1;
-  const step = BRIEFING_STEPS[state.currentStep];
-  const progress = calculateProgress(state.answers);
+  const step = state.steps[state.currentStep];
+  const progress = calculateProgress(state.steps, state.answers);
+  const meta = state.meta;
 
   root.innerHTML = `
     <div class="briefing-shell">
       <div class="briefing-hero">
         <div class="briefing-hero-content">
           <img src="/assets/img/logo.png" alt="DocAds">
-          <span class="badge">Briefing estratégico</span>
-          <h1>Olá, ${escapeHtml(state.clientName)} 👋</h1>
-          <p class="lede">Esse formulário é a base de toda a estratégia que vamos construir para o seu negócio. Quanto mais real e detalhado, melhor o resultado. Tempo médio: <strong>15 a 20 minutos</strong>. Suas respostas são salvas automaticamente.</p>
+          <span class="badge">${escapeHtml(meta.badge)}</span>
+          <h1>${meta.heroTitle(escapeHtml(state.clientName))}</h1>
+          <p class="lede">${meta.heroLede}</p>
         </div>
       </div>
 
       <div class="progress-shell">
         <div class="progress-inner">
           <div class="progress-track"><div class="progress-fill" style="width: ${progress}%"></div></div>
-          <span class="progress-text">${progress}% • Etapa ${state.currentStep + 1} de ${BRIEFING_STEPS.length}</span>
+          <span class="progress-text">${progress}% • Etapa ${state.currentStep + 1} de ${state.steps.length}</span>
           <span class="progress-saving" id="saving-indicator" style="opacity:0">✓ salvo</span>
         </div>
       </div>
@@ -112,7 +130,7 @@ function render() {
       <div class="briefing-content">
         <div class="step-card">
           <div class="stepper">
-            ${BRIEFING_STEPS.map((_, i) => `
+            ${state.steps.map((_, i) => `
               <div class="stepper-dot ${i < state.currentStep ? 'done' : ''} ${i === state.currentStep ? 'current' : ''}"></div>
             `).join('')}
           </div>
@@ -127,7 +145,7 @@ function render() {
 
           <div class="step-actions">
             <button class="btn btn-ghost" id="btn-back" ${state.currentStep === 0 ? 'disabled' : ''}>← Voltar</button>
-            ${state.currentStep === BRIEFING_STEPS.length - 1
+            ${state.currentStep === state.steps.length - 1
               ? `<button class="btn btn-gradient btn-lg" id="btn-submit">Enviar briefing →</button>`
               : `<button class="btn btn-primary" id="btn-next">Continuar →</button>`
             }
@@ -174,7 +192,7 @@ function renderField(f, value) {
         <label class="${labelClass}">${escapeHtml(f.label)}</label>
         ${hint}
         <div class="radio-group">
-          ${f.options.map((o, i) => `
+          ${f.options.map(o => `
             <label class="radio">
               <input type="radio" name="${f.id}" data-id="${f.id}" value="${escapeHtml(o)}" ${value === o ? 'checked' : ''}>
               <span class="radio-label">${escapeHtml(o)}</span>
@@ -261,7 +279,6 @@ function renderField(f, value) {
 function attachListeners(step) {
   const root = $('#briefing-root');
 
-  // inputs (text/textarea/select) — aplica máscara se houver
   root.querySelectorAll('input[type=text], input[type=email], input[type=tel], input[type=url], input[type=number], textarea, select').forEach(el => {
     el.addEventListener('input', () => {
       const mask = el.dataset.mask;
@@ -271,15 +288,17 @@ function attachListeners(step) {
     });
   });
 
-  // radio
   root.querySelectorAll('input[type=radio]').forEach(el => {
     el.addEventListener('change', () => {
       state.answers[el.dataset.id] = el.value;
       autoSave();
+      if (anyFieldDependsOn(state.steps, el.dataset.id)) {
+        clearOrphanAnswers();
+        render();
+      }
     });
   });
 
-  // checkbox
   root.querySelectorAll('input[type=checkbox]').forEach(el => {
     el.addEventListener('change', () => {
       const id = el.dataset.id;
@@ -292,25 +311,10 @@ function attachListeners(step) {
       }
       state.answers[id] = arr;
       autoSave();
-      // Re-render se algum campo depende desse valor (showIf)
-      if (anyFieldDependsOn(id)) render();
+      if (anyFieldDependsOn(state.steps, id)) render();
     });
   });
 
-  // radio — re-render se afeta condição
-  const reRenderOnRadio = root.querySelectorAll('input[type=radio]');
-  reRenderOnRadio.forEach(el => {
-    const original = el.onchange;
-    el.addEventListener('change', () => {
-      if (anyFieldDependsOn(el.dataset.id)) {
-        // Limpa respostas dos campos que vão sumir
-        clearOrphanAnswers();
-        render();
-      }
-    });
-  });
-
-  // file upload
   root.querySelectorAll('input[type=file]').forEach(el => {
     el.addEventListener('change', async (e) => {
       const fieldId = el.dataset.id;
@@ -352,7 +356,6 @@ function attachListeners(step) {
     });
   });
 
-  // remove file
   root.querySelectorAll('.btn-remove-file').forEach(btn => {
     btn.addEventListener('click', () => {
       const fieldId = btn.dataset.fieldId;
@@ -391,7 +394,11 @@ function attachListeners(step) {
     btn.textContent = 'Enviando...';
     try {
       await submitBriefing(slug, state.answers);
-      window.location.href = `/obrigado.html?c=${encodeURIComponent(state.clientName)}`;
+      const params = new URLSearchParams({
+        c: state.clientName,
+        t: state.briefingType
+      });
+      window.location.href = `/obrigado.html?${params.toString()}`;
     } catch (e) {
       console.error(e);
       toast('Erro ao enviar. Tente novamente em instantes.', 'error');
@@ -402,18 +409,8 @@ function attachListeners(step) {
   });
 }
 
-function anyFieldDependsOn(fieldId) {
-  for (const step of BRIEFING_STEPS) {
-    for (const f of step.fields) {
-      if (f.showIf?.field === fieldId) return true;
-    }
-  }
-  return false;
-}
-
 function clearOrphanAnswers() {
-  // Remove respostas de campos que estão atualmente escondidos
-  for (const step of BRIEFING_STEPS) {
+  for (const step of state.steps) {
     for (const f of step.fields) {
       if (f.showIf && !shouldShowField(f, state.answers)) {
         delete state.answers[f.id];
@@ -434,7 +431,7 @@ function formatBytes(bytes) {
 function validateStep(step) {
   let firstError = null;
   for (const f of step.fields) {
-    if (!shouldShowField(f, state.answers)) continue; // pula campos escondidos
+    if (!shouldShowField(f, state.answers)) continue;
     const v = state.answers[f.id];
     const isEmpty = v == null || v === '' || (Array.isArray(v) && v.length === 0);
     if (f.required && isEmpty) {
@@ -468,11 +465,11 @@ async function saveImmediately() {
     const indicator = $('#saving-indicator');
     if (indicator) indicator.style.opacity = '0.5';
 
-    const progress = calculateProgress(state.answers);
+    const progress = calculateProgress(state.steps, state.answers);
     const progressEl = document.querySelector('.progress-fill');
     const progressText = document.querySelector('.progress-text');
     if (progressEl) progressEl.style.width = `${progress}%`;
-    if (progressText) progressText.textContent = `${progress}% • Etapa ${state.currentStep + 1} de ${BRIEFING_STEPS.length}`;
+    if (progressText) progressText.textContent = `${progress}% • Etapa ${state.currentStep + 1} de ${state.steps.length}`;
 
     await saveBriefingDraft(slug, state.answers, progress, state.currentStep);
 
@@ -511,7 +508,7 @@ function showAlreadySubmitted() {
         <div class="briefing-hero-content">
           <img src="/assets/img/logo.png" alt="DocAds">
           <h1>Briefing já enviado ✓</h1>
-          <p class="lede">Obrigado, ${escapeHtml(state.clientName)}! Suas respostas já foram recebidas pela equipe DocAds. Em breve entraremos em contato com sua estratégia.</p>
+          <p class="lede">Obrigado, ${escapeHtml(state.clientName)}! Suas respostas já foram recebidas pela equipe DocAds. Em breve entraremos em contato.</p>
         </div>
       </div>
     </div>
