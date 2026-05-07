@@ -91,10 +91,11 @@
               ${b.submitted_at ? 'Submetido ' + formatDate(b.submitted_at) : 'Última edição ' + formatDate(b.updated_at)}
             </p>
           </div>
-          <div style="display:flex;gap:8px;">
+          <div style="display:flex;gap:8px;flex-wrap:wrap;">
             <button class="btn btn-outline" onclick="window.print()">🖨️ Imprimir / PDF</button>
             ${b.status === 'submitted' ? `<button class="btn btn-primary" id="btn-mark-analyzed">Marcar como analisado</button>` : ''}
             <a href="/admin/cliente.html?id=${c.id}" class="btn btn-ghost">Ver cliente</a>
+            <button class="btn btn-ghost" id="btn-delete-briefing" style="color:var(--danger);">🗑️ Excluir briefing</button>
           </div>
         </div>
 
@@ -135,6 +136,28 @@
         });
         toast('Marcado como analisado', 'success');
         await load();
+      });
+
+      $('#btn-delete-briefing')?.addEventListener('click', async () => {
+        const ok = confirm(
+          `⚠️ Excluir esse briefing de ${meta.label} de "${c.company_name}" permanentemente?\n\n` +
+          `Vai apagar todas as respostas e arquivos associados. O cliente continua cadastrado.\n\n` +
+          `Confirmar exclusão?`
+        );
+        if (!ok) return;
+        try {
+          await supabase.from('activity_log').insert({
+            client_id: c.id, briefing_id: b.id, action: 'briefing_deleted',
+            meta: { briefing_type: briefingType, status_before: b.status }
+          });
+          const { error } = await supabase.from('briefings').delete().eq('id', b.id);
+          if (error) throw error;
+          toast('Briefing excluído', 'success');
+          setTimeout(() => { window.location.href = `/admin/cliente.html?id=${c.id}`; }, 600);
+        } catch (err) {
+          console.error(err);
+          toast('Erro ao excluir: ' + (err.message || ''), 'error');
+        }
       });
     }
 

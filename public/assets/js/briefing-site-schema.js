@@ -28,20 +28,14 @@ export const SITE_BRIEFING_STEPS = [
       { id: 'motivo_redesign', type: 'textarea', label: 'Por que está refazendo o site?',
         hint: 'O que não funciona hoje? O que você quer mudar?',
         showIf: { field: 'tipo_projeto', in: ['Redesign de site existente', 'Migração de plataforma'] } },
-      { id: 'urgencia', type: 'select', label: 'Qual a urgência do projeto?',
+      { id: 'urgencia', type: 'select', label: 'Qual o prazo desejado de entrega?',
+        hint: 'Considere o tempo realista de aprovação de etapas (design, conteúdo, testes)',
         options: [
-          'Tenho deadline crítico (até 30 dias)',
+          'Crítico — preciso em até 30 dias',
           'Próximos 60 dias',
           '2 a 3 meses',
           '3 a 6 meses',
-          'Sem pressa, qualidade acima de prazo'
-        ], required: true },
-      { id: 'orcamento_estimado', type: 'select', label: 'Orçamento previsto para o projeto',
-        hint: 'Apenas desenvolvimento (sem mídia, sem mensalidade pós-launch)',
-        options: [
-          'Até R$ 3.000', 'R$ 3.000 a R$ 8.000', 'R$ 8.000 a R$ 15.000',
-          'R$ 15.000 a R$ 30.000', 'R$ 30.000 a R$ 60.000',
-          'Acima de R$ 60.000', 'Quero proposta sem teto definido'
+          'Mais de 6 meses'
         ], required: true }
     ]
   },
@@ -52,10 +46,6 @@ export const SITE_BRIEFING_STEPS = [
     title: 'Sobre a empresa',
     desc: 'Contexto rápido do negócio para alinhar tom e abordagem.',
     fields: [
-      { id: 'razao_social', type: 'text', label: 'Razão social', required: true },
-      { id: 'nome_fantasia', type: 'text', label: 'Nome fantasia (como o cliente conhece)', required: true },
-      { id: 'cnpj', type: 'text', label: 'CNPJ', placeholder: '00.000.000/0000-00', mask: 'cnpj' },
-      { id: 'segmento', type: 'text', label: 'Segmento / nicho', placeholder: 'Ex: imobiliária, clínica estética, autopeças', required: true },
       { id: 'descricao_negocio', type: 'textarea', label: 'Descreva o que sua empresa faz em 2 a 3 frases',
         hint: 'Como se estivesse explicando para alguém que nunca ouviu falar', required: true },
       { id: 'tempo_mercado', type: 'select', label: 'Há quanto tempo no mercado?', options: [
@@ -115,10 +105,7 @@ export const SITE_BRIEFING_STEPS = [
         ] },
       { id: 'idioma', type: 'checkbox', label: 'Em quais idiomas o site precisa estar?',
         options: ['Português', 'Inglês', 'Espanhol', 'Outros (especifique nas observações)'],
-        required: true },
-      { id: 'acessibilidade', type: 'radio', label: 'Acessibilidade WCAG é prioridade?',
-        hint: 'Importante se o público inclui pessoas com deficiência ou se há exigência regulatória',
-        options: ['Sim, prioridade alta', 'Sim, mas não crítico', 'Não, padrão básico está ok', 'Não sei'] }
+        required: true }
     ]
   },
 
@@ -220,9 +207,7 @@ export const SITE_BRIEFING_STEPS = [
       { id: 'paginas_extras', type: 'textarea', label: 'Outras páginas / seções específicas',
         hint: 'O que mais precisa estar no site?' },
       { id: 'qtd_produtos_servicos', type: 'select', label: 'Quantos produtos / serviços terão página própria?',
-        options: ['Nenhum', '1 a 5', '6 a 20', '21 a 50', '51 a 200', 'Mais de 200', 'Não sei'] },
-      { id: 'sitemap_referencia', type: 'textarea', label: 'Referência de sitemap (se tiver site atual ou quer copiar de outro)',
-        hint: 'Cole a estrutura ou link do site de referência' }
+        options: ['Nenhum', '1 a 5', '6 a 20', '21 a 50', '51 a 200', 'Mais de 200', 'Não sei'] }
     ]
   },
 
@@ -241,12 +226,21 @@ export const SITE_BRIEFING_STEPS = [
         ], required: true },
       { id: 'tem_fotos', type: 'radio', label: 'Tem fotos profissionais para usar no site?',
         options: ['Sim, banco completo', 'Sim, algumas', 'Não, mas tenho material de celular', 'Não tem nada — precisa banco de imagens', 'Precisa ensaio fotográfico'] },
+      { id: 'drive_fotos', type: 'url', label: 'Link do Drive com as fotos',
+        placeholder: 'https://drive.google.com/...',
+        hint: 'Pode deixar em branco e enviar depois',
+        showIf: { field: 'tem_fotos', in: ['Sim, banco completo', 'Sim, algumas'] } },
       { id: 'tem_videos', type: 'radio', label: 'Tem vídeos prontos?',
         options: ['Sim, vários', 'Sim, alguns', 'Não, mas posso gravar', 'Não — precisa produção', 'Não vai usar vídeo'] },
+      { id: 'drive_videos', type: 'url', label: 'Link do Drive com os vídeos',
+        placeholder: 'https://drive.google.com/...',
+        hint: 'Pode deixar em branco e enviar depois',
+        showIf: { field: 'tem_videos', in: ['Sim, vários', 'Sim, alguns'] } },
       { id: 'depoimentos', type: 'radio', label: 'Tem depoimentos / cases de cliente?',
         options: ['Sim, em vídeo + texto', 'Sim, só em texto', 'Sim, só em print de WhatsApp/redes', 'Não tem'] },
-      { id: 'drive_materiais', type: 'url', label: 'Link do Drive com materiais (fotos, vídeos, textos)',
-        placeholder: 'https://drive.google.com/...' },
+      { id: 'drive_materiais', type: 'url', label: 'Link do Drive com outros materiais (textos, logos, depoimentos)',
+        placeholder: 'https://drive.google.com/...',
+        hint: 'Opcional — só se tiver materiais além de fotos e vídeos' },
       { id: 'precisa_traducao', type: 'radio', label: 'Precisa traduzir conteúdo para outro idioma?',
         options: ['Sim, profissional', 'Sim, automática (Google Translate)', 'Não'],
         showIf: { field: 'idioma', in: ['Inglês', 'Espanhol', 'Outros (especifique nas observações)'] } }
@@ -388,8 +382,6 @@ export const SITE_BRIEFING_STEPS = [
         options: ['Não, só o responsável principal', 'Sim, 2 pessoas', 'Sim, 3 ou mais (comitê)', 'Depende da etapa'] },
       { id: 'tempo_aprovacao', type: 'select', label: 'Tempo médio de aprovação que podemos contar',
         options: ['Menos de 24h', '1 a 2 dias', '3 a 5 dias', 'Mais de 1 semana'] },
-      { id: 'reunioes_frequencia', type: 'select', label: 'Frequência de reuniões durante o projeto',
-        options: ['Semanal', 'Quinzenal', 'Apenas marcos (kickoff / homologação / launch)', 'Sem reuniões — comunicação assíncrona'] },
       { id: 'canal_comunicacao', type: 'checkbox', label: 'Canais de comunicação preferidos',
         options: ['WhatsApp', 'E-mail', 'Slack', 'Telegram', 'Reunião online (Google Meet / Zoom)', 'Reunião presencial'] },
       { id: 'manutencao_pos_launch', type: 'radio', label: 'Vai precisar de manutenção pós-launch?',

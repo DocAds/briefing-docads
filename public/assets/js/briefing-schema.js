@@ -13,9 +13,6 @@ export const BRIEFING_STEPS = [
     title: 'Sobre a empresa',
     desc: 'Vamos começar conhecendo o seu negócio. Quanto mais real, melhor a estratégia.',
     fields: [
-      { id: 'razao_social', type: 'text', label: 'Razão social', required: true },
-      { id: 'nome_fantasia', type: 'text', label: 'Nome fantasia (como o cliente conhece)', required: true },
-      { id: 'cnpj', type: 'text', label: 'CNPJ', placeholder: '00.000.000/0000-00', mask: 'cnpj' },
       { id: 'site', type: 'url', label: 'Site oficial', placeholder: 'https://' },
       { id: 'instagram', type: 'text', label: 'Instagram', placeholder: '@perfil' },
       { id: 'tempo_mercado', type: 'select', label: 'Há quanto tempo no mercado?', options: [

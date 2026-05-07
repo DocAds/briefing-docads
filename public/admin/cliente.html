@@ -41,14 +41,78 @@
     </main>
   </div>
 
+  <!-- Modal: editar cliente -->
+  <div class="modal-backdrop hidden" id="modal-edit">
+    <div class="modal">
+      <div class="modal-header">
+        <h3>Editar cliente</h3>
+        <button class="modal-close" data-close>×</button>
+      </div>
+      <form id="form-edit" class="stack">
+        <div class="field">
+          <label class="field-label field-required">Razão social / Nome da empresa</label>
+          <input class="input" name="company_name" required>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label class="field-label">Pessoa de contato</label>
+            <input class="input" name="contact_name">
+          </div>
+          <div class="field">
+            <label class="field-label">CNPJ</label>
+            <input class="input" name="cnpj" data-mask="cnpj" inputmode="numeric" placeholder="00.000.000/0000-00">
+          </div>
+        </div>
+        <div class="row">
+          <div class="field">
+            <label class="field-label">E-mail</label>
+            <input class="input" type="email" name="contact_email">
+          </div>
+          <div class="field">
+            <label class="field-label">Telefone</label>
+            <input class="input" type="tel" name="contact_phone" data-mask="phone" inputmode="numeric" placeholder="(00) 00000-0000">
+          </div>
+        </div>
+        <div class="field">
+          <label class="field-label">Segmento</label>
+          <input class="input" name="segment" placeholder="Ex: imobiliária, autopeças, clínica...">
+        </div>
+        <div class="field">
+          <label class="field-label">Notas internas</label>
+          <textarea class="textarea" name="internal_notes" rows="3"></textarea>
+        </div>
+        <div style="display:flex;gap:12px;justify-content:flex-end;margin-top:8px;">
+          <button type="button" class="btn btn-ghost" data-close>Cancelar</button>
+          <button type="submit" class="btn btn-primary">Salvar alterações</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <script src="/assets/js/config.js"></script>
   <script type="module">
     import { mountAdminShell } from '/assets/js/admin-shell.js';
     import { supabase, createBriefingLink } from '/assets/js/supabase.js';
     import { TYPE_META } from '/assets/js/briefing-registry.js';
     import { $, escapeHtml, formatDate, statusBadge, toast, copyToClipboard, getQueryParam } from '/assets/js/utils.js';
+    import { applyMask } from '/assets/js/masks.js';
 
     await mountAdminShell('clientes');
+
+    // Aplica máscaras em inputs com data-mask
+    document.querySelectorAll('input[data-mask]').forEach(el => {
+      el.addEventListener('input', () => applyMask(el, el.dataset.mask));
+    });
+
+    // Modal close handlers
+    document.querySelectorAll('[data-close]').forEach(b => {
+      b.addEventListener('click', () => {
+        document.querySelectorAll('.modal-backdrop').forEach(m => m.classList.add('hidden'));
+      });
+    });
+    document.querySelectorAll('.modal-backdrop').forEach(m => {
+      m.addEventListener('click', e => { if (e.target === m) m.classList.add('hidden'); });
+    });
 
     const cfg = window.DOCADS_CONFIG;
     const PUBLIC_URL = cfg.PUBLIC_URL || window.location.origin;
@@ -269,11 +333,48 @@
       });
 
       $('#btn-edit')?.addEventListener('click', () => {
-        const newName = prompt('Nome da empresa:', c.company_name);
-        if (newName && newName !== c.company_name) {
-          supabase.from('clients').update({ company_name: newName }).eq('id', c.id).then(load);
-        }
+        const form = $('#form-edit');
+        form.elements.company_name.value = c.company_name || '';
+        form.elements.contact_name.value = c.contact_name || '';
+        form.elements.contact_email.value = c.contact_email || '';
+        form.elements.contact_phone.value = c.contact_phone || '';
+        form.elements.cnpj.value = c.cnpj || '';
+        form.elements.segment.value = c.segment || '';
+        form.elements.internal_notes.value = c.internal_notes || '';
+        // Re-aplica máscaras nos valores carregados
+        form.querySelectorAll('input[data-mask]').forEach(el => {
+          if (el.value) applyMask(el, el.dataset.mask);
+        });
+        $('#modal-edit').classList.remove('hidden');
       });
+
+      $('#form-edit').onsubmit = async (e) => {
+        e.preventDefault();
+        const fd = new FormData(e.target);
+        const payload = {
+          company_name: fd.get('company_name')?.toString().trim() || null,
+          contact_name: fd.get('contact_name')?.toString().trim() || null,
+          contact_email: fd.get('contact_email')?.toString().trim() || null,
+          contact_phone: fd.get('contact_phone')?.toString().trim() || null,
+          cnpj: fd.get('cnpj')?.toString().trim() || null,
+          segment: fd.get('segment')?.toString().trim() || null,
+          internal_notes: fd.get('internal_notes')?.toString().trim() || null
+        };
+        if (!payload.company_name) {
+          toast('Razão social é obrigatória', 'warning');
+          return;
+        }
+        try {
+          const { error } = await supabase.from('clients').update(payload).eq('id', c.id);
+          if (error) throw error;
+          $('#modal-edit').classList.add('hidden');
+          toast('Cliente atualizado', 'success');
+          await load();
+        } catch (err) {
+          console.error(err);
+          toast('Erro ao salvar: ' + (err.message || ''), 'error');
+        }
+      };
 
       $('#btn-archive')?.addEventListener('click', async () => {
         const isArchived = c.status === 'archived';
@@ -310,7 +411,8 @@
         briefing_submitted: '✓ Briefing concluído pelo cliente',
         client_created: '+ Cliente cadastrado',
         link_generated: '🔗 Link de briefing gerado',
-        briefing_analyzed: '📊 Briefing marcado como analisado'
+        briefing_analyzed: '📊 Briefing marcado como analisado',
+        briefing_deleted: '🗑️ Briefing excluído'
       };
       const base = labels[a.action] || a.action;
       const t = a.meta?.briefing_type;
