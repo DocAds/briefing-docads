@@ -240,6 +240,24 @@ function renderField(f, value) {
     `;
   }
 
+  if (f.type === 'repeater') {
+    const items = Array.isArray(value) ? value : [];
+    const itemLabel = f.itemLabel || 'Item';
+    const addLabel = f.addLabel || '+ Adicionar item';
+    return `
+      <div class="field" data-field="${f.id}">
+        <label class="${labelClass}">${escapeHtml(f.label)}</label>
+        ${hint}
+        <div class="repeater-list" data-repeater="${f.id}">
+          ${items.map((item, idx) => renderRepeaterItem(f, item, idx, itemLabel)).join('')}
+        </div>
+        <button type="button" class="repeater-add" data-repeater-add="${f.id}">
+          <span>${escapeHtml(addLabel)}</span>
+        </button>
+      </div>
+    `;
+  }
+
   if (f.type === 'checkbox') {
     const arr = Array.isArray(value) ? value : [];
     return `
@@ -269,6 +287,49 @@ function renderField(f, value) {
       <input class="input" type="${inputType}" id="${id}" data-id="${f.id}"
         value="${escapeHtml(displayValue)}"
         placeholder="${escapeHtml(f.placeholder || '')}"${maskAttr}>
+    </div>
+  `;
+}
+
+function renderRepeaterItem(f, item, idx, itemLabel) {
+  const safe = item && typeof item === 'object' ? item : {};
+  return `
+    <div class="repeater-item" data-repeater-id="${f.id}" data-repeater-idx="${idx}">
+      <div class="repeater-item-head">
+        <span class="repeater-item-title">${escapeHtml(itemLabel)} ${idx + 1}</span>
+        <button type="button" class="repeater-remove" data-repeater-remove="${f.id}" data-index="${idx}" aria-label="Remover">×</button>
+      </div>
+      <div class="repeater-item-body">
+        ${f.fields.map(sub => renderRepeaterSubField(f.id, idx, sub, safe[sub.id])).join('')}
+      </div>
+    </div>
+  `;
+}
+
+function renderRepeaterSubField(repeaterId, idx, sub, value) {
+  const id = `r-${repeaterId}-${idx}-${sub.id}`;
+  const labelClass = sub.required ? 'field-label field-required' : 'field-label';
+  const labelHtml = `<label class="${labelClass}" for="${id}">${escapeHtml(sub.label)}</label>`;
+  const placeholder = escapeHtml(sub.placeholder || '');
+  const v = value == null ? '' : String(value);
+
+  if (sub.type === 'textarea') {
+    return `
+      <div class="repeater-subfield">
+        ${labelHtml}
+        <textarea class="textarea" id="${id}"
+          data-repeater-input="${repeaterId}" data-index="${idx}" data-sub="${sub.id}"
+          placeholder="${placeholder}">${escapeHtml(v)}</textarea>
+      </div>
+    `;
+  }
+
+  return `
+    <div class="repeater-subfield">
+      ${labelHtml}
+      <input class="input" type="text" id="${id}"
+        data-repeater-input="${repeaterId}" data-index="${idx}" data-sub="${sub.id}"
+        value="${escapeHtml(v)}" placeholder="${placeholder}">
     </div>
   `;
 }
@@ -368,6 +429,50 @@ function attachListeners(step) {
     });
   });
 
+  root.querySelectorAll('[data-repeater-input]').forEach(el => {
+    el.addEventListener('input', () => {
+      const fid = el.dataset.repeaterInput;
+      const idx = parseInt(el.dataset.index, 10);
+      const sub = el.dataset.sub;
+      const arr = Array.isArray(state.answers[fid]) ? [...state.answers[fid]] : [];
+      while (arr.length <= idx) arr.push({});
+      arr[idx] = { ...(arr[idx] || {}), [sub]: el.value };
+      state.answers[fid] = arr;
+      autoSave();
+    });
+  });
+
+  root.querySelectorAll('[data-repeater-add]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const fid = btn.dataset.repeaterAdd;
+      const arr = Array.isArray(state.answers[fid]) ? [...state.answers[fid]] : [];
+      arr.push({});
+      state.answers[fid] = arr;
+      saveImmediately();
+      render();
+      requestAnimationFrame(() => {
+        const newItems = document.querySelectorAll(`[data-repeater-id="${fid}"]`);
+        const last = newItems[newItems.length - 1];
+        if (last) {
+          last.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          last.querySelector('input, textarea')?.focus();
+        }
+      });
+    });
+  });
+
+  root.querySelectorAll('[data-repeater-remove]').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const fid = btn.dataset.repeaterRemove;
+      const idx = parseInt(btn.dataset.index, 10);
+      const arr = Array.isArray(state.answers[fid]) ? [...state.answers[fid]] : [];
+      arr.splice(idx, 1);
+      state.answers[fid] = arr;
+      saveImmediately();
+      render();
+    });
+  });
+
   $('#btn-back')?.addEventListener('click', () => {
     if (state.currentStep > 0) {
       state.currentStep--;
@@ -430,21 +535,47 @@ function formatBytes(bytes) {
 
 function validateStep(step) {
   let firstError = null;
+  const setError = (fieldEl, msg) => {
+    if (!fieldEl) return;
+    if (!firstError) firstError = fieldEl;
+    fieldEl.querySelector(':scope > .field-error')?.remove();
+    const err = document.createElement('div');
+    err.className = 'field-error';
+    err.textContent = msg;
+    fieldEl.appendChild(err);
+  };
+
   for (const f of step.fields) {
     if (!shouldShowField(f, state.answers)) continue;
     const v = state.answers[f.id];
+    const fieldEl = document.querySelector(`[data-field="${f.id}"]`);
+
+    if (f.type === 'repeater') {
+      const items = Array.isArray(v) ? v : [];
+      const minItems = f.minItems != null ? f.minItems : (f.required ? 1 : 0);
+      if (items.length < minItems) {
+        setError(fieldEl, minItems === 1
+          ? 'Adicione ao menos 1 item.'
+          : `Adicione ao menos ${minItems} itens.`);
+        continue;
+      }
+      const requiredSubs = (f.fields || []).filter(s => s.required);
+      const hasIncomplete = items.some(it => {
+        const obj = it && typeof it === 'object' ? it : {};
+        return requiredSubs.some(s => {
+          const val = obj[s.id];
+          return val == null || String(val).trim() === '';
+        });
+      });
+      if (hasIncomplete) {
+        setError(fieldEl, 'Preencha todos os campos obrigatórios de cada item (ou remova o que estiver vazio).');
+      }
+      continue;
+    }
+
     const isEmpty = v == null || v === '' || (Array.isArray(v) && v.length === 0);
     if (f.required && isEmpty) {
-      const fieldEl = document.querySelector(`[data-field="${f.id}"]`);
-      if (fieldEl && !firstError) firstError = fieldEl;
-      const existingError = fieldEl?.querySelector('.field-error');
-      if (existingError) existingError.remove();
-      if (fieldEl) {
-        const err = document.createElement('div');
-        err.className = 'field-error';
-        err.textContent = 'Esse campo é obrigatório.';
-        fieldEl.appendChild(err);
-      }
+      setError(fieldEl, 'Esse campo é obrigatório.');
     }
   }
   if (firstError) {

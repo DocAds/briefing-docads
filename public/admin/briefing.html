@@ -167,6 +167,33 @@
       let display;
       if (isEmpty) {
         display = '<span class="answer-empty">— não respondido</span>';
+      } else if (field.type === 'repeater' && Array.isArray(value)) {
+        const itemLabel = field.itemLabel || 'Item';
+        const subs = field.fields || [];
+        display = `<div style="display:flex;flex-direction:column;gap:10px;">
+          ${value.map((item, i) => {
+            const obj = item && typeof item === 'object' ? item : {};
+            return `
+              <div style="background:var(--surface-2);border:1px solid var(--border);border-radius:8px;padding:12px 14px;">
+                <div style="font-size:12px;font-weight:600;color:var(--docads-navy);margin-bottom:8px;">
+                  ${escapeHtml(itemLabel)} ${i + 1}
+                </div>
+                ${subs.map(s => {
+                  const v = obj[s.id];
+                  const empty = v == null || v === '';
+                  return `
+                    <div style="margin-bottom:8px;">
+                      <div style="font-size:12px;color:var(--text-muted);margin-bottom:2px;">${escapeHtml(s.label)}</div>
+                      ${empty
+                        ? '<div class="answer-empty">— não respondido</div>'
+                        : `<div class="answer-value">${escapeHtml(String(v))}</div>`}
+                    </div>
+                  `;
+                }).join('')}
+              </div>
+            `;
+          }).join('')}
+        </div>`;
       } else if (field.type === 'file' && Array.isArray(value)) {
         display = `<div style="display:flex;flex-direction:column;gap:6px;">
           ${value.map(f => `

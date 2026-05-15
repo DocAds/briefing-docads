@@ -213,6 +213,32 @@ export const SITE_BRIEFING_STEPS = [
 
   // -------------------------------------------------------------------
   {
+    id: 'produtos_servicos',
+    title: 'Produtos & serviços',
+    desc: 'Liste os principais produtos ou serviços que vão aparecer no site. Adicione um por vez — pode incluir quantos forem importantes para o contexto da equipe.',
+    fields: [
+      {
+        id: 'produtos_servicos_lista',
+        type: 'repeater',
+        label: 'Produtos / serviços oferecidos',
+        hint: 'Clique em "+ Adicionar produto / serviço" para incluir cada item. Foque nos que vão aparecer no site ou guiar a estratégia.',
+        itemLabel: 'Produto / serviço',
+        addLabel: '+ Adicionar produto / serviço',
+        minItems: 1,
+        required: true,
+        fields: [
+          { id: 'nome', type: 'text', label: 'Nome do produto / serviço',
+            placeholder: 'Ex: Consultoria de Marketing Digital', required: true },
+          { id: 'descricao', type: 'textarea', label: 'Descrição do produto / serviço',
+            placeholder: 'Conte em 2 a 4 frases o que está incluído, para quem é e qual o diferencial',
+            required: true }
+        ]
+      }
+    ]
+  },
+
+  // -------------------------------------------------------------------
+  {
     id: 'conteudo',
     title: 'Conteúdo & copy',
     desc: 'Quem produz texto, foto e vídeo? 80% dos atrasos vêm daqui.',
